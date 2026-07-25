@@ -2,8 +2,9 @@
 
 **Class: Contract (promoted from Plan at sign-off).**
 **Status: SIGNED OFF — 2026-07-25, by the owner, via kickoff questionnaire.
-Amended same day: Amendment 1 (guarantees-compiler reframing) — see end of document.
-Amendment 1 re-sign-off: PENDING owner confirmation of the amended problem statement.**
+Amended same day: Amendment 1 (guarantees-compiler reframing) and Amendment 2
+(trust-boundary model) — see end of document.
+Re-sign-off: PENDING one owner confirmation covering both amendments.**
 
 This document becomes the contract that authorizes solution work. It reaches
 **Signed off** only when every round below has recorded answers and the owner has
@@ -442,3 +443,79 @@ pair only), day-2 operation, TEE/confidential compute, developer self-serve.
 
 **Amendment status: recorded 2026-07-25; awaiting owner re-sign-off (one explicit
 confirmation that the amended problem statement above captures the intent).**
+
+---
+
+## Amendment 2 — 2026-07-25: the trust-boundary model
+
+**What changed and why:** the owner proposed a simplifying assumption — d7s trusts only
+its own managed infra, everything outside is untrusted and user-piped — and asked for it
+to be corrected and refined against how the exemplar tools (dbt especially) handle
+safeguard guarantees. Recorded per docs rules: statement verbatim, correction, dated
+decisions.
+
+### Owner statement (verbatim, 2026-07-25)
+
+> Now, let's make some simplifying assumptions: all the example solutions I mentioned to
+> you generally work on the premise that they are fully-managed by the actual tool
+> themselves (correct me if I am wrong, but I think this is the design intent).
+> Similarly, d7s may adopt a decision that it can only control and trust its own managed
+> infra - anything outside of that will be not be trusted, and it will be entirely up to
+> the user to pipe those resources into the platform itself, or from platform to an
+> outside resource. Help me correct and refine this idea - I am particularly interested
+> in how dbt handles these strong safeguard guarantees.
+
+### Correction accepted by the owner (via the B1–B4 round)
+
+The exemplars are not walled gardens; they are **provenance-trust systems with declared
+gates**. Terraform trusts only its own state, never mutates what it doesn't own, and
+represents the outside as read-only data sources plus an explicit import ceremony.
+Kubernetes controllers reconcile only owned objects. dbt's `ref()`/`source()` dichotomy
+is the pattern d7s adopts: everything dbt builds carries total guarantees (order,
+lineage, tests) *because it built it*; everything it didn't build must be declared as a
+named `source()` — never written to, but checked at the gate (freshness thresholds,
+schema tests) — and guarantees attenuate **explicitly, never silently** past that gate.
+"Outside is entirely the user's problem" is rejected: it recreates undeclared spaghetti
+exactly where guarantees end — the pre-dbt world at the platform's edge.
+
+### Decisions (2026-07-25, owner, via refinement questionnaire)
+
+- **B1 — Trust boundary: provenance.** Inside = anything d7s compiled/provisioned —
+  including the seam pair's managed database. Outside = anything it didn't. Terraform
+  state / dbt-ref semantics; the hybrid story stays first-class.
+- **B2 — Egress: compiled default-deny.** The allowlist (mesh ServiceEntry +
+  authorization) is generated only from declared externals and declared wiring.
+  Undeclared external access from inside the platform is impossible, not discouraged —
+  dbt's "no anonymous references," enforced at the network layer. Flagship behavior of
+  the zero-trust guarantee family. No break-glass: rule 50 stands.
+- **B3 — Guarantee attenuation at the wall: split by family.** Security-family
+  guarantees REFUSE to compile across an external hop (no best-effort tier, rules
+  37/50). Durability/freshness-family guarantees may compile across the wall as
+  **labeled CONDITIONAL guarantees** with the boundary probe attached — the
+  source-freshness analog: the claim is only as strong as the gate check, and the
+  compiled output says so.
+- **B4 — v1 scope: declare + deny; probes at skeleton.** v1 ships the `external`
+  declaration and enforced default-deny egress with compiled allowlists. Boundary
+  conformance probes (reachability/TLS/schema/freshness) arrive with the skeleton's
+  verification plane, alongside attestation. An import/adoption ceremony (bringing an
+  existing unmanaged resource inside, à la `terraform import`) is explicitly v2+.
+
+### The `external` declaration (new primitive, binding)
+
+d7s's `source()`: a named, schema-carrying declaration of a resource d7s did not compile
+and will never provision or mutate. It is the **only legal crossing point** of the trust
+boundary — all wiring to or from the outside references an `external` by name — and the
+attachment point for boundary probes. Externals participate in the wiring graph and in
+conditional guarantees; they never receive emitted infrastructure.
+
+### Consequences
+
+- The amended problem statement (Amendment 1) gains one sentence of force: guarantees
+  are total inside the provenance boundary, conditional-and-labeled or refused across
+  it — never silent.
+- Week-one plan is unchanged (its default-deny slice already conforms); `external`
+  declarations enter after week one, within v1.
+- Open items: unchanged from Amendment 1, plus none added — B1–B4 are closed.
+
+**Amendment status: recorded 2026-07-25; folded into the Amendment 1 re-sign-off (one
+owner confirmation covers the amended statement plus this boundary model).**

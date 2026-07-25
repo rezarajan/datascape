@@ -51,6 +51,12 @@ Run before any product change; subagent prompts point here too.
   target only. GitOps-compiler posture unchanged (no owned reconcile loop, no mutating
   verbs, no owned state); lakehouse is the acceptance workload; refused:
   arbitrary-substrate abstraction, day-2 operation, TEE, self-serve.
+- Trust boundary (Amendment 2): inside = d7s-compiled, by provenance. The outside
+  crosses only through named `external` declarations (d7s's `source()` — never
+  provisioned or mutated). Egress is compiled default-deny; allowlists come only from
+  declared wiring. Security guarantees refuse to compile across the wall; durability/
+  freshness may compile as labeled CONDITIONAL with a boundary probe. v1 = declare +
+  deny; boundary probes at skeleton; import ceremony v2+.
 - New owner answers are recorded verbatim first, then synthesized; contradictions are
   flagged as findings, not reconciled silently.
 - Order of work: owner re-signs Amendment 1 + approves week-one plan Revision A → build
