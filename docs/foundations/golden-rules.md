@@ -529,7 +529,88 @@ other rule insufficient.
 ## How to use this document
 
 - During discovery (now): rules 1–7 are the active contract; the rest wait.
+  *(Superseded 2026-07-25 — see the amendment below: solution work is authorized and
+  every un-struck rule binds.)*
 - When solution work starts: this document is reviewed once against the defined problem —
   rules that don't apply to what datascape becomes are struck with a recorded reason, not
   silently ignored. What remains binds.
 - A rule is amended the way an ADR is: a new dated entry naming what it changes and why.
+
+---
+
+## Amendment — 2026-07-25: v1 applicability review (problem definition Q3.4)
+
+**What this amends and why.** The one-time review prescribed above was performed against
+the signed-off problem definition (`../discovery/00-problem-definition.md`, SIGNED OFF
+2026-07-25). The shape reviewed against: datascape is a **GitOps compiler** — it compiles
+stack declarations into Flux-consumable manifests for one Kubernetes target; it owns no
+reconcile loop, no mutating verbs against any backend, and no state store (git is the
+state; the cluster belongs to Flux and the operators). Zero-trust is the differentiator;
+verifiable compute = supply-chain attestation + policy admission proofs +
+declared=running; the lakehouse deployment is the acceptance workload; multi-runtime
+and day-2 operations are refused.
+
+**Outcome: 67 of 70 rules bind. Rules 21, 25, and 26 are struck** — all three for the
+same structural reason: they constrain a mutating runtime engine and an owned state
+store, and a GitOps compiler has neither. Struck rules keep their text above; each
+carries a reopen criterion here.
+
+### Struck rules
+
+- **Rule 21 (idempotency as an `Ensure*` interface contract) — struck.** Datascape makes
+  zero mutating calls against any backend, so there are no `Ensure*` adapters for the
+  contract to bind. The property the rule protected — a re-run is safe — is carried by
+  rule 22 (same declaration → byte-identical output) and by Flux's own idempotent
+  reconciliation. *Reopens automatically* if datascape ever gains a mutating adapter —
+  a direct-apply mode, a bootstrap verb, anything that talks to a cluster API with
+  write intent.
+
+- **Rule 25 (atomic state persistence, versioning, advisory locking) — struck.**
+  Datascape owns no state store: compiled output in git is the only state it produces,
+  and git already provides atomicity, versioning, and history. Cluster state belongs to
+  Flux and the operators. *Reopens* the moment datascape persists anything beyond the
+  git worktree — a compile cache, a verification ledger, a lock file.
+
+- **Rule 26 (state records intent, never observations) — struck**, same reason as
+  rule 25: there is no state store to constrain. Its spirit survives in one binding
+  place: compiled output and its attestations record intent only; observations appear
+  solely in declared=running verification *reports*, which are never persisted as
+  authority. Same reopen criterion as rule 25.
+
+### Binding interpretations (rule text unchanged)
+
+How specific rules bind in the compiler shape — recorded once so they aren't
+re-litigated per task:
+
+- **Rule 11 (second implementation tests the seam):** binds, carrying the Q3.3 flag:
+  the Flux emitter interface has one implementation and is therefore a hypothesis, kept
+  exactly as thin as the compiler's output boundary (emit-manifests-for-target).
+  Nothing is designed for a hypothetical second target until one genuinely arrives.
+- **Rule 20 (plan/apply separation):** compile is the plan — read-only and
+  deterministic; the git diff of compiled output is the reviewable plan artifact; apply
+  belongs to Flux and is triggered only by merge. No datascape verb mutates a cluster.
+- **Rule 23 (drift surfaced, never silently auto-corrected):** datascape's
+  declared=running verification only reports; it never mutates. Flux healing drift is
+  not a violation of this rule — it is the explicitly declared, configured behavior of
+  the reconciler the user chose, not silent auto-correction. Drift comparison remains
+  against desired configuration, not liveness.
+- **Rule 24 (dependency DAG):** cycles are a compile-time hard error; ordering edges
+  compile into the target's dependency semantics (Flux `dependsOn`); the
+  hidden-edge-in-a-string clause binds in full — wiring fields (`host:port`, connection
+  URIs) must create graph edges, because cross-component wiring is the product's
+  core job.
+- **Rule 27 (ownership labels):** every compiled object carries datascape ownership
+  labels; Flux prune scope and declared=running verification operate only on
+  labeled objects.
+- **Rule 29 ("removed" is a stated contract):** removal becomes a compile-time
+  contract — what removing a component from the declaration causes (pruned vs
+  retained, per component class) is stated and conformance-tested on compiled output;
+  data-bearing components compose with rule 28's retain-by-default.
+- **Rule 30 (exists ≠ ready ≠ reachable):** binds on the verification and acceptance
+  surface — probes run from the real consumer's vantage point, over the channel the
+  consumer will actually use (through the mesh, with mTLS), not inside datascape's
+  absent runtime loop.
+- **Rule 63 (conditions as the health surface):** runtime conditions belong to the
+  operators and Flux; declared=running *reads* those conditions rather than re-deriving
+  health, and datascape's own CLI/verification output is the structured, parse-tested
+  surface.

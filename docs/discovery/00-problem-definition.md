@@ -221,6 +221,17 @@ that don't apply are struck with a recorded reason.
 > *Answer (2026-07-25):* not yet performed. Recorded as the **first solution-phase task**,
 > to run alongside repo setup per `../foundations/agentic-development.md`, before any
 > product code. The owner signed off with this item explicitly open.
+>
+> *Answer (2026-07-25, review performed as the first solution-phase task):* **Review
+> complete — 67 of 70 rules bind; rules 21, 25, and 26 are struck.** All three fall for
+> the same structural reason: they constrain a mutating runtime engine and an owned
+> state store, and the signed-off shape (GitOps compiler, no reconcile loop, no mutating
+> verbs, git as the only state) has neither. Each struck rule keeps its text and carries
+> a reopen criterion — any future mutating adapter or persisted state reinstates it.
+> Eight rules (11, 20, 23, 24, 27, 29, 30, 63) carry recorded compiler-shape
+> interpretations with text unchanged. Full outcome: the dated 2026-07-25 amendment at
+> the end of `../foundations/golden-rules.md`. With this, every un-struck rule binds,
+> and this Q3.4 open item from sign-off is **closed**.
 
 ## Round 4 — Validation plan
 
