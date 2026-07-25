@@ -1,7 +1,9 @@
 # Problem definition
 
 **Class: Contract (promoted from Plan at sign-off).**
-**Status: SIGNED OFF — 2026-07-25, by the owner, via kickoff questionnaire.**
+**Status: SIGNED OFF — 2026-07-25, by the owner, via kickoff questionnaire.
+Amended same day: Amendment 1 (guarantees-compiler reframing) — see end of document.
+Amendment 1 re-sign-off: PENDING owner confirmation of the amended problem statement.**
 
 This document becomes the contract that authorizes solution work. It reaches
 **Signed off** only when every round below has recorded answers and the owner has
@@ -86,6 +88,9 @@ specific, observed failure — not the inferred one?
 > Kubernetes** — standing stacks up fast, with a security posture that justifies
 > self-hosting, is what makes that migration viable. (Runtime consequence recorded under
 > Q3.3.)
+> *(Amended by Amendment 1, 2026-07-25: all-or-nothing migration replaced by hybrid
+> placement — managed where warranted, k8s where suitable, chosen per component against
+> its declared guarantees.)*
 
 **Q1.4 — What evidence exists (or will be gathered) that this pain is real and felt by
 more than one person?**
@@ -144,6 +149,10 @@ and pre-commit to refusing them for v1.
 > **multi-runtime abstraction** (one Kubernetes target; the Flux seam stays thin — see
 > Q3.3) and **day-2 operations** (backup/restore, HA tuning, upgrades, continuous drift
 > *repair* — day-0 stand-up is the whole v1 job).
+> *(Refined by Amendment 1, 2026-07-25: hybrid placement enters scope via exactly one
+> seam-proving component pair; arbitrary-substrate abstraction stays refused.
+> PROVISIONING recovery machinery is day-0 and in scope; OPERATING it stays day-2 and
+> refused.)*
 >
 > *Finding (flagged, not reconciled):* the question asked for three refusals; the owner
 > gave two, and deliberately pulled the other candidates INTO scope — zero-trust
@@ -169,6 +178,8 @@ week one.
 > **Zero-trust's role (owner):** *it IS the differentiator* — the pitch is "zero-trust
 > data platform by default"; the reason to leave managed services is getting a security
 > posture the console can't give. A skeleton without it proves nothing.
+> *(Superseded by Amendment 1, 2026-07-25: the differentiator is the guarantees
+> compiler; zero-trust becomes its flagship guarantee family.)*
 >
 > **"Verifiable compute," owner definition (three selections):**
 > 1. *Supply-chain attestation* — signed images, SBOM/provenance, admission refuses
@@ -265,6 +276,9 @@ in week one this time, not at the end.
 
 ## Problem statement (synthesis, 2026-07-25)
 
+*(Superseded in part by Amendment 1, same day — the amended statement at the end of this
+document is authoritative. This text is kept per the no-deletion rule.)*
+
 A real platform team (the owner's team) is deliberately migrating its data
 infrastructure off managed cloud services onto self-hosted Kubernetes. Today, standing
 up a new data stack costs days to weeks of console-and-Terraform wiring, and the
@@ -299,3 +313,132 @@ scope (Q2.3), and the rule-11 seam tension on the Flux interface (Q3.3).
 Once signed off, this document is a contract: scope changes reopen it explicitly
 (a dated amendment naming what changed and why), and `golden-rules.md` rule 4 applies —
 every scope growth re-answers "who asked?"
+
+---
+
+## Amendment 1 — 2026-07-25: the guarantees-compiler reframing
+
+**What changed and why:** the owner, reviewing the signed-off definition end-to-end the
+same day, found it "does not capture the intent" and reopened it. Recorded here per the
+docs rules: statement verbatim first, contradictions flagged, re-answers dated.
+
+### Owner statement (verbatim, 2026-07-25)
+
+> I've gone ahead and updated the main branch on the datascape repo. However, I do feel
+> like it does not capture the intent. As such, I would like to re-evaluate the product
+> (with you being the practicality anchor). You see, many of the actually useful
+> products offer a convenience function to getting high-quality, production-grade
+> results. For example, dbt delivers on the premise of 'Build data pipelines the way
+> software engineers build apps: modular, tested, and version-controlled. Native SQL
+> comprehension and local validation catch issues before they hit the warehouse, while
+> multi-dialect compilation keeps logic portable as your data platform evolves" - a tool
+> that truly solves many latent issues upfront. Terraform helps solve infrastructure
+> provisioning headaches by enabling infrastructure as code across many providers -
+> enabling engineers to rapidly provision production-grade infra they can trust.
+> Kubernetes also extends this IaC model - and especially Talos Linux, which helps to
+> realiably provision production-grade Kubernetes and make its management super
+> straightforward - a win all-around because convenience here actually means you ship
+> faster and more reliabliy. For me, there is this gap in the data platform space - if
+> you're not using a cloud data platform, you're out-of-luck in terms of convenience.
+> Even then, migrating from one provider to the next is always a headache because there
+> is always tight coupling. Now - the thing about data is that you really do require
+> reliable infrastructure, and maybe Kubernetes alone cannot provide that (at least
+> without much headache involved and the actual requirement for super heavy-duty worker
+> notes for production databases); there is tangible benefit in using cloud-provider
+> managed infra like databases or object storage, but at the same time some applications
+> do not always need managed services, and can indeed run on a K8S cluster (which is
+> portable, for the most part). If you noticed, across all the example tools I
+> mentioned, they can be run at production-grade levels across any scale - a small
+> startup, a hobbyist, a mid-sized company, a one-off project, or even to super
+> large-scale complex enterprises. They all do this by realizing a SYSTEM that functions
+> deterministically across all these levels; the system itself does the heavy-lifting of
+> ensuring everything works; and at-scale deterministic functionality (formal proofs for
+> example) guarantee things will always work. To tie it all in - d7s is supposed to
+> remediate that gap I identified for data engineers themselves. It gets data engineers
+> to stop thinking about implementation and rather the declaration of their platform's
+> system, knowing that d7s will make sure all the guards are in-place. I need you to
+> help me refine this idea, actually identify the problem statement, and develop a
+> project around it.
+
+### Findings — contradictions with the signed-off text (flagged, then resolved below)
+
+1. **Primary user** (Q1.1): platform team / IDP → statement says "data engineers
+   themselves," at any scale. *Resolved by A3: beachhead unchanged (the owner's team);
+   any-scale is vision, not v1 contract.*
+2. **Placement** (Q1.3 strategic frame): "deliberate move off managed" →
+   managed-where-warranted hybrid. *Resolved by A2: placement becomes a declared,
+   compiler-validated binding.*
+3. **Multi-runtime refusal** (Q2.3): placement portability is now the point. *Resolved
+   by A2: one seam-proving pair in v1; arbitrary-substrate abstraction stays refused.*
+4. **Differentiator** (Q3.1): "zero-trust IS the pitch" → superseded. *Resolved by A1:
+   the guarantees compiler is the pitch; zero-trust is its flagship guarantee family.*
+
+**Practicality-anchor corrections accepted by the owner** (via the A1–A4 round): no
+"formal proofs" claim — the honest v1 promise is determinism + fail-closed compilation +
+conformance-tested substrates; no all-scales claim in the v1 contract — the exemplars
+(dbt, Terraform, Kubernetes, Talos) each launched on one small load-bearing primitive
+and one beachhead, and earned generality later.
+
+### Re-answers (2026-07-25, owner, via re-evaluation questionnaire)
+
+- **A1 — Differentiator: the guarantees compiler.** The product is the
+  guarantee-checked platform graph — durability, recovery, security, and wiring
+  correctness declared per component and enforced at compile time. Zero-trust is the
+  flagship guarantee family, not the product identity.
+- **A2 — v1 substrates: one seam-proving pair.** v1 compiles exactly ONE component both
+  ways — Postgres as CNPG-on-Kubernetes AND as a managed cloud database — and no other
+  component gets a managed variant. d7s still never applies anything: the managed
+  placement compiles to declarative artifacts applied by existing machinery. *Open
+  design question (decide at week-one plan revision):* the managed-emit artifact — Flux
+  tf-controller `Terraform` CR, plain Terraform module, or Crossplane claim. The first
+  two keep one delivery plane (Flux); all three preserve the no-mutating-verbs posture.
+- **A3 — Beachhead: still the owner's platform team.** The evidence (first-hand weekly
+  pain, Q1.4) is unchanged; only the product thesis widened. The any-scale, "data
+  engineers everywhere" framing is the vision statement, carried in the README, not a
+  v1 commitment.
+- **A4 — Survivors, unchanged:** GitOps-compiler posture (no owned reconcile loop, no
+  mutating verbs); the kill criterion (4 weeks / 2+ real stacks — the clock restarts at
+  the amended contract's first dogfood week); week-one dogfood validation (revised to a
+  guarantee-bearing slice); the lakehouse acceptance workload.
+
+### The guarantee primitive (new, binding)
+
+Every declared guarantee ships as a **triple**: (1) a compile-time check, (2) emitted
+infrastructure that provides it, (3) a conformance probe that proves it against the
+running stack. A guarantee that cannot do all three does not ship — fail closed, no
+best-effort tier (golden rules 34/37/50). v1 guarantee families: **transport security**
+(mesh mTLS + compiled least-privilege authorization), **durability/recovery**
+(scheduled backups / RPO declared per component — provisioning is day-0 and in scope;
+operating restores stays day-2 and refused), **wiring correctness** (cross-component
+bindings validated at compile time). Attestation/admission-proof/declared=running
+families remain skeleton scope as before (Q3.1).
+
+### Amended problem statement (authoritative; supersedes the synthesis above)
+
+Data engineers assembling platforms outside a single cloud vendor must hand-build
+production-grade guarantees — durability, recovery, security, wiring correctness — from
+infrastructure primitives that don't understand data, and every managed-vs-self-hosted
+choice hard-couples the architecture to a provider. **d7s is a compiler for data
+platforms**: declare the system — components, data flows, and the guarantees each must
+meet — and d7s compiles it, deterministically, to substrates that can honor those
+guarantees, refusing to compile a platform that can't. Placement (managed service vs
+operator-on-k8s) is a declared binding the compiler validates, not an architecture
+rewrite. d7s owns no reconcile loop and mutates nothing: the GitOps engine applies what
+d7s compiles.
+
+**Beachhead:** the owner's platform team, on real stack requests. **Success:** request →
+running, guarantee-enforced stack in under one hour. **Kill:** 4 weeks / 2+ real stacks,
+dogfood loses to status quo. **v1 refuses:** arbitrary-substrate abstraction (one seam
+pair only), day-2 operation, TEE/confidential compute, developer self-serve.
+
+### Consequences
+
+- `docs/plans/01-week-one.md` requires revision before owner approval (revision proposed
+  there, dated).
+- The golden-rules Q3.4 amendment is unaffected: no rule's binding status changes; the
+  struck rules' reopen criteria (21/25/26) still hold since d7s still never mutates.
+- Open items carried forward: team name/denominator (Q1.1a), managed-emit artifact
+  choice (A2), and re-sign-off of this amendment by the owner.
+
+**Amendment status: recorded 2026-07-25; awaiting owner re-sign-off (one explicit
+confirmation that the amended problem statement above captures the intent).**

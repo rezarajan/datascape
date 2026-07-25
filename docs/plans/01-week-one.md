@@ -1,6 +1,9 @@
 # Week-one artifact plan
 
-**Class: Plan.** **Status: awaiting owner approval — no product code until approved.**
+**Class: Plan.** **Status: Revision A pending owner approval — no product code until
+approved. The original plan below predates Amendment 1 of the problem definition
+(guarantees-compiler reframing, 2026-07-25) and is kept unedited; Revision A at the end
+adjusts it and is what the owner approves.**
 
 Implements Q4.2 of the signed-off problem definition verbatim: *compiler + one
 component + mTLS* — a declaration compiled to Flux-consumable manifests for ONE
@@ -92,3 +95,37 @@ slice toward the Q3.1 skeleton in weeks 2–4.
   cluster enter?
 - **Q1.1a** (contract open item): team name + developer denominator, recorded before
   the first dogfood week.
+
+---
+
+## Revision A — 2026-07-25 (post-Amendment 1: guarantees-compiler)
+
+Everything above stands except as amended here. The slice grows by one declared
+guarantee, not by one component — the differentiator is now the guarantee triple, so
+week one must prove it.
+
+1. **The declaration gains a `guarantees` block** on the Postgres component. Week one
+   implements exactly two guarantee families end-to-end as triples (check → emitted
+   infra → conformance probe):
+   - *Transport security:* mesh mTLS + default-deny authorization (unchanged from
+     steps 4–5 above).
+   - *Durability/recovery:* a declared RPO compiles to a CNPG `ScheduledBackup` +
+     retention config; the conformance probe verifies a backup object actually appears.
+     A declared RPO the emitter cannot honor **fails compilation** with the remedy in
+     the error (rules 34/35).
+2. **Placement is expressible from day one, compilable to k8s only this week.**
+   The component schema carries `placement: self-hosted | managed`; `managed` fails
+   closed with "planned, not yet available" (rule 34). The managed side of the seam
+   pair (A2) is week-two scope, after the managed-emit artifact decision
+   (tf-controller CR / Terraform module / Crossplane claim) is made at this revision's
+   approval.
+3. **Acceptance scenario gains one probe:** declare RPO on the example stack; verify
+   the ScheduledBackup exists and fires once on the kind cluster; then declare an
+   unsatisfiable RPO and verify compilation refuses (the negative probe for the
+   guarantee primitive — the check must be able to fail, rule 49).
+4. **Exit criteria add:** [ ] both guarantee triples demonstrated as triples — check,
+   emitted infra, and probe each shown working AND shown able to fail.
+5. **Open question for approval (blocking week two, not week one):** managed-emit
+   artifact for the seam pair — recommendation: Flux tf-controller `Terraform` CR,
+   keeping a single delivery plane; plain Terraform module is the fallback if the team
+   objects to tf-controller operationally.

@@ -14,12 +14,17 @@ This repository restarts the quest with the order of operations corrected:
 
 ## Current phase: solution setup
 
-The problem definition was **signed off by the owner on 2026-07-25** — datascape is a
-GitOps compiler that turns a declared data stack into Flux-consumable Kubernetes
-manifests with zero-trust and verifiability by default, for a platform team migrating
-off managed cloud services (see `docs/discovery/00-problem-definition.md`). No product
-code exists yet: repo setup and the golden-rules review come first. The repo currently
-holds:
+The problem definition was **signed off 2026-07-25 and amended the same day**
+(Amendment 1, awaiting re-sign-off): **d7s is a compiler for data platforms.** Declare
+the system — components, data flows, and the guarantees each must meet (durability,
+recovery, transport security, wiring correctness) — and d7s compiles it,
+deterministically, into artifacts your GitOps machinery applies, refusing to compile a
+platform that can't honor its declared guarantees. Placement (managed cloud service vs
+operator-on-Kubernetes) is a declared binding, not an architecture rewrite. The vision
+is dbt/Terraform-class convenience-to-production-grade for data platforms at any scale;
+the v1 beachhead is one real platform team (see
+`docs/discovery/00-problem-definition.md`). No product code exists yet. The repo
+currently holds:
 
 | Path | What it is |
 |---|---|

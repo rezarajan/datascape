@@ -15,9 +15,9 @@ mechanically enforcing this distinction kept plans and history honest.)
 | `foundations/golden-rules.md` | Contract | The engineering rules datascape is built under. |
 | `foundations/lessons-from-platformctl.md` | Record | Post-mortem of the predecessor project. |
 | `foundations/agentic-development.md` | Contract | Development-process rules for agentic work in this repo. |
-| `discovery/00-problem-definition.md` | Contract | Discovery answers and problem statement. **SIGNED OFF 2026-07-25** — scope changes reopen it via dated amendment. |
+| `discovery/00-problem-definition.md` | Contract | Discovery answers and problem statement. **SIGNED OFF 2026-07-25; Amendment 1 (guarantees-compiler) recorded same day, awaiting owner re-sign-off.** |
 | `consolidation.md` | Record | Dated log of doc-consolidation passes (28-day cadence; SessionStart hook warns on lapse). |
-| `plans/01-week-one.md` | Plan | Week-one artifact: compiler + Postgres (CNPG) + mesh mTLS → Flux manifests. Awaiting owner approval. |
+| `plans/01-week-one.md` | Plan | Week-one artifact: compiler + Postgres (CNPG) + two guarantee triples (mTLS, RPO) → Flux manifests. Revision A awaiting owner approval. |
 
 ## Reading order
 
