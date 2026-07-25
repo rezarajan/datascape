@@ -16,6 +16,7 @@ mechanically enforcing this distinction kept plans and history honest.)
 | `foundations/lessons-from-platformctl.md` | Record | Post-mortem of the predecessor project. |
 | `foundations/agentic-development.md` | Contract | Development-process rules for agentic work in this repo. |
 | `discovery/00-problem-definition.md` | Contract | Discovery answers and problem statement. **SIGNED OFF 2026-07-25** — scope changes reopen it via dated amendment. |
+| `consolidation.md` | Record | Dated log of doc-consolidation passes (28-day cadence; SessionStart hook warns on lapse). |
 
 ## Reading order
 

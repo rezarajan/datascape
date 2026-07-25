@@ -1,0 +1,7 @@
+# Auditable, human-created unlock marker for contract/record doc edits (see
+# .claude/hooks/guard-classified-docs.sh). Never committed.
+.claude/docs-unlock
+.claude/guard.log
+
+# Per-developer local overrides.
+.claude/settings.local.json
