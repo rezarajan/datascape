@@ -55,6 +55,9 @@ Run before any product change; subagent prompts point here too.
 - Process enforcement lives in `.claude/` (hooks derive their rosters from
   `docs/README.md` and agent frontmatter — never duplicate a list into a hook).
   Multi-session tasks keep `TASK_PROGRESS.md` at the repo root (agentic-development §4).
+- Commits follow strict google (conventional) style — `type(scope): subject`,
+  lowercase imperative subject, 72-char wrap — enforced by the versioned
+  `.githooks/commit-msg` gate (activated per-checkout at session start).
 
 ## Compact instructions
 

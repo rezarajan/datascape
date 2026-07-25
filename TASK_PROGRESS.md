@@ -19,7 +19,13 @@ file plus `git log`.
    checked-in subagents (test-runner, manifest-verifier: haiku; contract-reviewer:
    sonnet). Every gate demonstrated capable of failing AND passing (15/15 checks,
    run 2026-07-25).
-3. **Week-one plan** — WRITTEN at `docs/plans/01-week-one.md`; status: **AWAITING
+3. **Commit-style enforcement (owner directive, 2026-07-25)** — COMPLETE. Strict
+   google/conventional style gated by `.githooks/commit-msg` (activated via
+   `core.hooksPath` by a SessionStart hook); gate demonstrated failing and passing
+   (10/10 checks). The two unpushed commits were reworded to conform. The four
+   pre-existing commits (`7c38429..c24f4ec`, shared with `origin/main`) keep their
+   messages — rewriting shared history is an owner decision, not taken.
+4. **Week-one plan** — WRITTEN at `docs/plans/01-week-one.md`; status: **AWAITING
    OWNER APPROVAL**. Blocked by: the owner (nobody else unblocks). No product code
    until approved — see the CLAUDE.md invariant.
 

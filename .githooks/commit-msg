@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# commit-msg gate: strict google/conventional commit style, mechanically enforced
+# (agentic-development §7 — hooks can't be talked out of compliance).
+#
+# Required shape:
+#   <type>(<scope>)?: <subject>          header, <=72 chars, no trailing period,
+#                                        type from the list below, subject starts
+#                                        lowercase, imperative mood
+#   <blank line>
+#   <body>                               wrapped at 72 (trailers and URLs exempt)
+#
+# Activated via `git config core.hooksPath .githooks` (done by the SessionStart
+# hook .claude/hooks/ensure-git-hooks.sh).
+set -euo pipefail
+
+msg_file="$1"
+types='build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test'
+
+mapfile -t lines < <(grep -v '^#' "$msg_file")
+header="${lines[0]:-}"
+
+# Machine-generated shapes git owns are passed through.
+case "$header" in
+  Merge\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+errors=()
+
+if [ -z "$header" ]; then
+  errors+=("empty commit message")
+else
+  if ! grep -qE "^(${types})(\([a-z0-9./_-]+\))?!?: [a-z0-9]" <<<"$header"; then
+    errors+=("header must be '<type>(<scope>)?: <subject>' with type in {${types//|/, }} and a lowercase subject; got: '$header'")
+  fi
+  if [ "${#header}" -gt 72 ]; then
+    errors+=("header is ${#header} chars; max 72 (aim for <=50)")
+  fi
+  case "$header" in
+    *.) errors+=("header must not end with a period") ;;
+  esac
+fi
+
+if [ "${#lines[@]}" -gt 1 ] && [ -n "${lines[1]:-}" ]; then
+  errors+=("second line must be blank (separates header from body)")
+fi
+
+for i in "${!lines[@]}"; do
+  [ "$i" -lt 2 ] && continue
+  line="${lines[$i]}"
+  if [ "${#line}" -gt 72 ] \
+     && ! grep -qE '^[A-Za-z][A-Za-z-]*: ' <<<"$line" \
+     && ! grep -q '://' <<<"$line" \
+     && grep -q ' ' <<<"$line"; then
+    errors+=("body line $((i + 1)) is ${#line} chars; wrap at 72")
+  fi
+done
+
+if [ "${#errors[@]}" -gt 0 ]; then
+  {
+    echo "COMMIT REJECTED — google commit style violations:"
+    printf '  - %s\n' "${errors[@]}"
+    echo "Fix the message and retry. Example:"
+    echo "  feat(compiler): emit flux kustomization for postgres"
+    echo "Imperative mood ('add', not 'added') is required but not machine-checked."
+  } >&2
+  exit 1
+fi
+exit 0
