@@ -15,7 +15,7 @@ mechanically enforcing this distinction kept plans and history honest.)
 | `foundations/golden-rules.md` | Contract | The engineering rules datascape is built under. |
 | `foundations/lessons-from-platformctl.md` | Record | Post-mortem of the predecessor project. |
 | `foundations/agentic-development.md` | Contract | Development-process rules for agentic work in this repo. |
-| `discovery/00-problem-definition.md` | Plan → Contract | Open questions and answers; becomes a contract when marked **Signed off**. |
+| `discovery/00-problem-definition.md` | Contract | Discovery answers and problem statement. **SIGNED OFF 2026-07-25** — scope changes reopen it via dated amendment. |
 
 ## Reading order
 

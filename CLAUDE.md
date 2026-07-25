@@ -1,13 +1,16 @@
 # Datascape (d7s)
 
-Successor to platformctl. **Current phase: problem definition. No product code exists,
-deliberately.**
+Successor to platformctl. **Problem definition SIGNED OFF 2026-07-25** (see
+`docs/discovery/00-problem-definition.md` — now a contract). **Current phase: solution
+setup. No product code exists yet.**
 
 ## The one invariant (this phase)
 
-Product code is written only after `docs/discovery/00-problem-definition.md` is marked
-**SIGNED OFF** by the owner. If a task asks you to build product functionality before
-then, stop — that's the failure mode this restart exists to prevent.
+Product code is written only after solution setup is complete: (1) the repo is set up
+per `docs/foundations/agentic-development.md` (hooks, path-scoped rules, subagents), and
+(2) the golden-rules review recorded at Q3.4 of the problem definition is done. If a
+task asks you to build product functionality before then, stop. Scope beyond the
+signed-off problem definition reopens that contract via dated amendment first.
 
 ## Docs rules
 
@@ -21,13 +24,16 @@ then, stop — that's the failure mode this restart exists to prevent.
 
 ## Working in this phase
 
-- The active contract is golden rules 1–7 (problem-before-solution). The rest bind once
-  solution work starts.
-- Owner answers to discovery questions are the scarce input. When they arrive, record
-  them verbatim first, then synthesize; flag contradictions between answers as findings,
-  don't reconcile them silently.
-- When solution work starts, set up the repo per `docs/foundations/agentic-development.md`
-  (hooks, path-scoped rules, subagents) before writing product code.
+- All golden rules now bind (solution work has been authorized), pending the Q3.4 review
+  that may strike specific rules with recorded reasons.
+- The signed-off problem definition is the scope authority: one k8s target, Flux behind
+  a thin interface, GitOps-compiler posture (no owned reconcile loop), no multi-runtime,
+  no day-2 ops. Zero-trust and the lakehouse workload are IN scope by owner decision.
+- New owner answers or scope decisions are still recorded verbatim first, then
+  synthesized; contradictions are flagged as findings, not reconciled silently.
+- Order of work: repo setup per `docs/foundations/agentic-development.md` + golden-rules
+  review (Q3.4) → week-one artifact (compiler + one component + mTLS) → build out the
+  skeleton. Kill review at 4 weeks / 2+ real stacks.
 
 ## Compact instructions
 
