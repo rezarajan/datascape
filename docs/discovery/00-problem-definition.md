@@ -58,6 +58,12 @@ developers would consume the platform it builds with datascape?
 > rather than blocking the dogfood start the owner directed. *(Finding, not
 > reconciled: the sign-off note above asks for name AND count before the first
 > dogfood week — the count is now recorded, the name is not.)*
+>
+> *STRUCK (2026-07-26, owner, verbatim):* **"forego the team name (it is immaterial
+> to this project)"** — the team-name half of this open item is struck by owner
+> decision; the denominator (5) stands as the recorded adoption baseline. The
+> sign-off note's name-and-count requirement is amended accordingly by this dated
+> strike; the struck text above is kept per the docs rules.
 
 **Q1.2 — What is the ONE job-to-be-done that datascape must nail?**
 Stated as a job, not a feature: "when I ___, I want to ___, so I can ___." What is the
