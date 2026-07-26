@@ -33,11 +33,49 @@ file plus `git log`.
    re-signed-off in one owner confirmation; also fixed an inconsistent prior partial
    flip (commit `1248528` had updated only the top status line, not the amendment
    footers or `docs/README.md`).
-6. **Week-one build** — IN PROGRESS. Build order per Revision A: (a) Go module +
-   hexagonal scaffold + arch test, (b) Stack+postgres declaration schema
-   (guarantees + placement), (c) compiler core + Flux emitter with golden-file/
-   determinism tests, (d) zero-trust slice, (e) durability slice, (f) acceptance
-   harness on kind. Status of each sub-step tracked here as it lands.
+6. **Week-one build** — IN PROGRESS.
+   - (a) Go module + hexagonal scaffold + arch test — COMPLETE (`a75e6e7`). Arch test
+     verified able to fail on 3 distinct violations and pass cleanly reverted.
+   - (b) Stack+postgres declaration schema (guarantees + placement) — COMPLETE
+     (`605fda3`). YAML loader with strict unknown-field rejection; validation
+     aggregates all errors; `placement: managed` fails closed.
+   - (c) Compiler core + Flux emitter (namespace, CNPG operator HelmRelease, Cluster
+     CR, Kustomization `dependsOn`, `d7s.dev/*` labels) — COMPLETE (`00bface`).
+     Golden-file + determinism tests verified able to fail and pass. CLI's
+     `d7s compile <file> -o <dir>` verified against the exact documented invocation.
+   - (d) Zero-trust slice (STRICT PeerAuthentication + default-deny
+     AuthorizationPolicy from declared `allowedConsumers`) — COMPLETE (`afb5215`).
+   - (e) Durability slice (RPO → CNPG ScheduledBackup; unsatisfiable RPO refuses with
+     remedy) — COMPLETE (`6f7b1cc`). No `barmanObjectStore` destination is emitted —
+     v1 has no object-storage component/`external` declaration to resolve one from;
+     flagged as a finding for the live acceptance run.
+   - (f) Acceptance harness on kind — **BLOCKED, not started.** See finding below.
+     This is the exit-criteria checklist item (rule 58: verified by running, never
+     from memory) — none of it is checked off yet, and none of the guarantee triples'
+     "conformance probe" leg has been proven against a real cluster.
+
+## Finding: kind/minikube cannot run in this sandbox (2026-07-26)
+
+Both `kind create cluster` (bridge network, and again forcing `--network=host`) and
+`minikube start` (docker driver, pre-existing stopped profile) fail identically:
+`failed to set up container networking: ... operation not supported` when Docker
+tries to create a veth pair for the node container. This is a sandbox-level
+restriction on nested network-namespace/veth creation, not a config problem — cleaned
+up after each attempt (no leftover containers/networks beyond what pre-existed).
+
+The only other viable path is minikube's `--driver=none`, which runs kubelet/kubeadm
+directly on the host with no container isolation — a materially more invasive,
+harder-to-reverse action than anything else this task has done, so it was **not**
+attempted without explicit authorization.
+
+**Consequence:** exit criteria items requiring a running artifact (acceptance scenario
+on kind, both negative probes, the durability probe firing a real backup, the
+`barmanObjectStore`-less Cluster/ScheduledBackup shape actually being accepted by
+CNPG's admission webhook) are **unverified**. Everything gated on `go test`/`go build`
+(scaffold, schema, compiler+emitter, golden files, determinism, zero-trust and
+durability compile-time checks) is verified live; everything requiring a live
+Kubernetes API is not. Reported to the owner rather than silently adapting scope
+(agentic-development §5) or marking exit criteria done from memory (rule 58).
 
 ## Open items owned by the owner
 
