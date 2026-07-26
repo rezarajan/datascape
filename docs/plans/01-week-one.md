@@ -1,9 +1,10 @@
 # Week-one artifact plan
 
-**Class: Plan.** **Status: Revision A pending owner approval — no product code until
-approved. The original plan below predates Amendment 1 of the problem definition
-(guarantees-compiler reframing, 2026-07-25) and is kept unedited; Revision A at the end
-adjusts it and is what the owner approves.**
+**Class: Plan.** **Status: Revision A APPROVED — 2026-07-26, by the owner. Istio
+ambient confirmed (mesh choice); managed-emit artifact choice deferred to week two
+(does not block this build). The original plan below predates Amendment 1 of the
+problem definition (guarantees-compiler reframing, 2026-07-25) and is kept unedited;
+Revision A at the end adjusts it and is what the owner approved.**
 
 Implements Q4.2 of the signed-off problem definition verbatim: *compiler + one
 component + mTLS* — a declaration compiled to Flux-consumable manifests for ONE
@@ -89,12 +90,14 @@ slice toward the Q3.1 skeleton in weeks 2–4.
 
 ## Open questions for the owner (blocking only where marked)
 
-- **Mesh choice** (blocks step 4): Istio ambient as proposed?
-- **Identifier stem/label domain** (non-blocking this week): `d7s`, `d7s.dev/*`?
+- **Mesh choice** (blocks step 4): Istio ambient as proposed? **RESOLVED 2026-07-26 —
+  confirmed at Revision A approval.**
+- **Identifier stem/label domain** (non-blocking this week): `d7s`, `d7s.dev/*`? Not
+  re-raised at Revision A approval — stands as proposed.
 - **Dogfood substrate** (non-blocking): kind for week one; when does the team's real
-  cluster enter?
+  cluster enter? Not re-raised at Revision A approval — kind stands for week one.
 - **Q1.1a** (contract open item): team name + developer denominator, recorded before
-  the first dogfood week.
+  the first dogfood week. **Still open — not recorded at Revision A approval.**
 
 ---
 
@@ -128,4 +131,6 @@ week one must prove it.
 5. **Open question for approval (blocking week two, not week one):** managed-emit
    artifact for the seam pair — recommendation: Flux tf-controller `Terraform` CR,
    keeping a single delivery plane; plain Terraform module is the fallback if the team
-   objects to tf-controller operationally.
+   objects to tf-controller operationally. **DEFERRED 2026-07-26 — the owner declined
+   to decide at Revision A approval; this blocks week two only, not the week-one build,
+   per the owner's own framing above.**

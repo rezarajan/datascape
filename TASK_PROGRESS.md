@@ -25,14 +25,25 @@ file plus `git log`.
    (10/10 checks). The two unpushed commits were reworded to conform. The four
    pre-existing commits (`7c38429..c24f4ec`, shared with `origin/main`) keep their
    messages — rewriting shared history is an owner decision, not taken.
-4. **Week-one plan** — WRITTEN at `docs/plans/01-week-one.md`; status: **AWAITING
-   OWNER APPROVAL**. Blocked by: the owner (nobody else unblocks). No product code
-   until approved — see the CLAUDE.md invariant.
+4. **Week-one plan** — WRITTEN at `docs/plans/01-week-one.md`; status: **APPROVED
+   2026-07-26** (Revision A). Istio ambient confirmed; managed-emit artifact deferred
+   to week two.
+5. **Problem-definition re-sign-off** — COMPLETE (commit `9b8f716`, 2026-07-26).
+   Amendment 1 (guarantees-compiler) and Amendment 2 (trust-boundary) both
+   re-signed-off in one owner confirmation; also fixed an inconsistent prior partial
+   flip (commit `1248528` had updated only the top status line, not the amendment
+   footers or `docs/README.md`).
+6. **Week-one build** — IN PROGRESS. Build order per Revision A: (a) Go module +
+   hexagonal scaffold + arch test, (b) Stack+postgres declaration schema
+   (guarantees + placement), (c) compiler core + Flux emitter with golden-file/
+   determinism tests, (d) zero-trust slice, (e) durability slice, (f) acceptance
+   harness on kind. Status of each sub-step tracked here as it lands.
 
 ## Open items owned by the owner
 
 - **Q1.1a**: team name + developer-customer count — record (privately if repo goes
-  public) before the first dogfood week, so adoption claims have a denominator.
-- **Week-one plan approval** (step 3 above) — includes two named proposals to confirm
-  or override: mesh choice (Istio ambient proposed) and identifier stem/label domain
-  (`d7s`, `d7s.dev/*` proposed).
+  public) before the first dogfood week, so adoption claims have a denominator. Still
+  open as of 2026-07-26.
+- **Managed-emit artifact** (deferred at Revision A approval, blocks week two only):
+  Flux tf-controller `Terraform` CR (recommended) vs plain Terraform module vs
+  Crossplane claim.
