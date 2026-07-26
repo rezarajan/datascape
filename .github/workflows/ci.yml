@@ -19,6 +19,39 @@ jobs:
           go-version-file: go.mod
       - run: ./scripts/check.sh
 
+  quickstart:
+    name: quickstart (flake d7s + compile)
+    runs-on: ubuntu-latest
+    # Exercises QUICKSTART.md's own commands (rule 41 — docs example = e2e
+    # test): the flake-built `d7s` compiles a stack the same way the docs
+    # walk a developer through, so a stale vendorHash or a devShell
+    # regression is caught here, not at cold-quickstart time.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - run: nix build .#d7s
+      - name: nix develop drops a built d7s on PATH; compile the quickstart stack
+        run: |
+          cat > /tmp/quickstart-stack.yaml <<'EOF'
+          apiVersion: d7s.dev/v1alpha1
+          kind: Stack
+          name: quickstart
+          components:
+            - kind: postgres
+              name: orders-db
+              placement: self-hosted
+              credentials:
+                secretRef:
+                  name: orders-db-app
+              guarantees:
+                mtls: {}
+              allowedConsumers:
+                - serviceAccount: probe-client
+          EOF
+          nix develop --command d7s compile /tmp/quickstart-stack.yaml -o /tmp/quickstart-out
+          test -f /tmp/quickstart-out/apps/quickstart/orders-db-cluster.yaml
+
   acceptance:
     name: acceptance (kind)
     runs-on: ubuntu-latest

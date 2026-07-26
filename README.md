@@ -12,6 +12,9 @@ Its own planning record ends with the flagship example unable to load a single m
 This repository restarts the quest with the order of operations corrected:
 **define the problem first, then build the smallest thing that solves it.**
 
+New here? See [QUICKSTART.md](QUICKSTART.md) — clone, `nix develop` (the compiled
+binary is ready on `PATH`), declare a stack, compile, deliver.
+
 ## Current phase: week-one artifact — building
 
 The problem definition was **signed off 2026-07-25, amended the same day, and

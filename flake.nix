@@ -53,6 +53,7 @@
               fluxcd
               istioctl
               openssl
+              self.packages.${system}.d7s
             ];
           };
         }
@@ -65,6 +66,18 @@
           action = mkAction pkgs;
         in
         rec {
+          # The compiled CLI itself (docs/plans/03-week-three.md, slice 5 —
+          # owner directive: "just pop into a dev environment with the
+          # compiled binary available"). `cmd/d7s` is the composition
+          # root (golden rule 8); only it is built as a binary.
+          d7s = pkgs.buildGoModule {
+            pname = "d7s";
+            version = "0.0.0";
+            src = ./.;
+            subPackages = [ "cmd/d7s" ];
+            vendorHash = "sha256-g+yaVIx4jxpAQ/+WrGKxhVeliYx7nLQe/zsGpxV4Fn4=";
+          };
+
           compile-and-verify = action "compile-and-verify"
             (with pkgs; [
               go
