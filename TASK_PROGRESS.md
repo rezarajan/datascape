@@ -242,6 +242,29 @@ Research verified against upstream sources (releases, source code) — dated fac
   the provider can talk to a fake — a deviation-scale finding per §5, stopped and
   reported to the owner rather than built silently.
 
+## Week-two slices 2+3 (managed emitter + seam refusals) — built, pending commit (2026-07-26)
+
+Implementer slice under plan Revision 2: `placement: managed` compiles to a pinned
+`kislerdm/neon` (0.14.0) OpenTofu config (project/role/database) plus a
+tofu-controller `Terraform` CR (`infra.contrib.fluxcd.io/v1alpha2`, verified
+upstream, `approvePlan: auto`), API key by `neon-api-key` secret reference only;
+mtls+managed and allowedConsumers+managed refuse with boundary + remedy; rpo still
+refuses everywhere; managed golden fixture + determinism + refusal contract tests;
+self-hosted output proven byte-identical (no regression). Review: one finding —
+the managed credentials gap (`credentials.secretRef` declared but not consumed;
+Neon role created without password, no app-credentials Secret emitted) was
+disclosed only in the agent's report, not the artifact (rule 34) — returned for a
+dated in-code deferral note pointing at slice 5, where it must be wired
+(tofu-controller `writeOutputsToSecret` is the expected mechanism) or explicitly
+re-deferred. Test tiers green (build/vet/test, determinism both placements, three
+refusal spot checks). Implementer-flagged naming choice for owner: the key inside
+the `neon-api-key` Secret is `apiKey`.
+
+**Blocker: GPG signing.** gpg-agent's passphrase cache expired mid-session;
+pinentry times out unattended (same incident class as the recorded week-one one).
+The slice commit and this record's commit are held unsigned-nothing-bypassed until
+the owner unlocks the agent.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
