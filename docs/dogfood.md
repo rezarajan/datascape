@@ -154,3 +154,15 @@ namespace/Kustomization and read compiled output only from the repo's own
 `out/` — the self-hosted actions lack the parameterization the managed actions
 just gained. The first human's path ends at "compile your own stack"; delivery
 of a novel self-hosted stack still requires the example's names.
+
+**Second finding from the same cold-run session (2026-07-26, fixed `0aed269`):**
+the developer's next attempt hit `deliver` sitting silently after registering
+the GitRepository — the `git-source` step hadn't been run, and the bounded
+readiness poll gave no output, reading as a hang. Same defect class as the
+first finding, one step over: the prerequisite checks covered Flux/Istio/MinIO
+but not the git source, and the poll helper announced its wait only on timeout.
+Fixed and live-verified both directions: `deliver` (both scenarios) now refuses
+up front with the remedy when the git source is absent, and every bounded wait
+in the harness prints `waiting (bounded): <what>` when it starts. One human
+session has now produced three operator-facing fixes and one named
+parameterization finding — evidence no orchestrator-driven run could generate.
