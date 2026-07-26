@@ -231,3 +231,23 @@ The week-two blocker above is therefore RESOLVED; scope moves to
   the emitted Kustomization objects has not been exercised** (the harness applies
   `out/` directly and says so). Wiring a real git source through Flux is a scheduled
   week-two item alongside the managed-seam work.
+
+**Additive note, 2026-07-26 (week-two plan Revision 2, slice 4 — Flux-reconciliation
+harness wiring; earlier narrowing text above kept, not erased):** the exit-criterion-1
+gap this narrowing named is closed. `scripts/acceptance-kind.sh` no longer applies
+`out/` directly: it stands up a throwaway in-cluster git source (a bare repo served
+over the git smart-HTTP protocol), pushes the compiled `out/` tree to it, creates the
+Flux `GitRepository` the emitter's Kustomizations already name (`d7s`/`flux-system`),
+applies only the two emitted Flux Kustomization CRs, and lets kustomize-controller /
+helm-controller reconcile the CNPG operator, the `Cluster`, and the zero-trust objects
+from the git source — the documented `flux reconcile` flow is now the tested flow. A
+guard asserts every compiled object's `metadata.managedFields` manager is
+`kustomize-controller`, failing the run if any compiled object is ever touched by a
+direct `kubectl` apply again. Verified by running the full harness through the pinned
+toolchain (`nix develop --command bash scripts/acceptance-kind.sh`): compile,
+determinism, the any-RPO refusal, the git-source push, Flux reconciliation of both
+Kustomizations, CNPG cluster healthy, the managed-fields guard, the positive mTLS
+probe, and the off-mesh refusal all passed live; the run ended
+`acceptance scenario PASSED` with clean, ephemeral teardown. The emitter needed no
+changes — its `GitRepository`/Kustomization naming and `path` convention already
+assumed exactly this shape.

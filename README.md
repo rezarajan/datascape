@@ -37,9 +37,9 @@ skeleton (owner decision, week-one plan "Owner decisions — 2026-07-26"). Try i
 go build -o d7s ./cmd/d7s
 ./d7s compile examples/week-one/stack.yaml -o ./out
 ./scripts/acceptance-kind.sh   # the same scenario, live, on a throwaway kind cluster:
-                                # compile + direct-apply + live probes are verified;
-                                # Flux reconciliation of the emitted Kustomizations is
-                                # week-two work
+                                # compile, then push out/ to a git source and let
+                                # Flux (kustomize-controller/helm-controller) reconcile
+                                # the emitted Kustomizations, plus live probes
 ```
 
 | Path | What it is |
@@ -52,7 +52,7 @@ go build -o d7s ./cmd/d7s
 | `docs/README.md` | The docs map — classifies every document as contract, plan, or record. |
 | `cmd/d7s`, `internal/` | The compiler: hexagonal layout (domain / ports / compiler core / adapters), arch-tested. |
 | `examples/week-one/stack.yaml` | The acceptance-scenario declaration — also the docs example and the e2e test input. |
-| `scripts/acceptance-kind.sh` | The acceptance harness: compile + direct-apply + live probes, run live on kind, in CI too — Flux reconciliation of the emitted Kustomizations is week-two work. |
+| `scripts/acceptance-kind.sh` | The acceptance harness: compile, then deliver the compiled Kustomizations to a real kind cluster the documented GitOps way — pushed to an in-cluster git source and reconciled by Flux (kustomize-controller/helm-controller), never applied directly — plus live probes, run live on kind, in CI too. |
 
 ## The one rule of this phase
 
