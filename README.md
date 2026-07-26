@@ -36,10 +36,14 @@ skeleton (owner decision, week-one plan "Owner decisions — 2026-07-26"). Try i
 ```
 go build -o d7s ./cmd/d7s
 ./d7s compile examples/week-one/stack.yaml -o ./out
-./scripts/acceptance-kind.sh   # the same scenario, live, on a throwaway kind cluster:
+nix run .#acceptance           # the same scenario, live, on a throwaway kind cluster:
                                 # compile, then push out/ to a git source and let
                                 # Flux (kustomize-controller/helm-controller) reconcile
-                                # the emitted Kustomizations, plus live probes
+                                # the emitted Kustomizations, plus live probes.
+                                # Each step is also its own flake action
+                                # (nix run .#cluster-up, .#flux-install, .#istio-install,
+                                # .#git-source, .#deliver, .#guard, .#probes, .#teardown) —
+                                # see scripts/actions/.
 ```
 
 | Path | What it is |
@@ -52,7 +56,7 @@ go build -o d7s ./cmd/d7s
 | `docs/README.md` | The docs map — classifies every document as contract, plan, or record. |
 | `cmd/d7s`, `internal/` | The compiler: hexagonal layout (domain / ports / compiler core / adapters), arch-tested. |
 | `examples/week-one/stack.yaml` | The acceptance-scenario declaration — also the docs example and the e2e test input. |
-| `scripts/acceptance-kind.sh` | The acceptance harness: compile, then deliver the compiled Kustomizations to a real kind cluster the documented GitOps way — pushed to an in-cluster git source and reconciled by Flux (kustomize-controller/helm-controller), never applied directly — plus live probes, run live on kind, in CI too. |
+| `flake.nix`, `scripts/actions/`, `scripts/lib/common.sh` | The acceptance harness, nixified: compile, then deliver the compiled Kustomizations to a real kind cluster the documented GitOps way — pushed to an in-cluster git source and reconciled by Flux (kustomize-controller/helm-controller), never applied directly — plus live probes. Decomposed into small, human-readable, shellcheck-verified `nix run .#<action>` units (pinned per-unit runtime dependencies) composed by the thin `nix run .#acceptance` orchestrator, run live on kind, in CI too. |
 
 ## The one rule of this phase
 

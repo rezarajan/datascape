@@ -262,3 +262,19 @@ operator's HelmRelease and Deployment before forcing the app-layer Kustomization
 reconcile on demand. Closing this at the emitter (adding `spec.healthChecks` to the
 compiled Kustomization) is a named future-slice candidate, not done here — scope for
 this slice was the harness delivery path, not the compiled Kustomization shape.
+
+**Additive note, 2026-07-26 (week-two plan Revision 3, slice 6 — nixified harness
+actions; earlier text above kept, not erased):** `scripts/acceptance-kind.sh` (the
+entry point named throughout this section) has been decomposed and no longer
+exists. It is now a set of small, human-readable, shellcheck-verified actions under
+`scripts/actions/` (`cluster-up`, `flux-install`, `istio-install`, `git-source`,
+`compile-and-verify`, `deliver`, `guard`, `probes`, `teardown`) sharing one config
+library (`scripts/lib/common.sh`), each individually runnable via the flake
+(`nix run .#<action>`) and composed, in the same order with the same trap-based
+ephemeral teardown, by a thin orchestrator. **The documented entry point for the
+full scenario is now `nix run .#acceptance`**, superseding the script path named
+above. Verified live: `nix run .#acceptance` passed end to end — compile,
+determinism, the any-RPO refusal, the git-source push, Flux reconciliation of both
+Kustomizations, the seven-object managed-fields guard, the positive mTLS probe, and
+the off-mesh refusal all green — ending `acceptance scenario PASSED` with clean,
+ephemeral teardown (confirmed by listing kind clusters afterward: none left behind).

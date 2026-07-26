@@ -24,10 +24,12 @@ jobs:
     # Deep tier (golden rule 43): explicit, impact-selected, not what a
     # developer waits on locally. Native Docker on ubuntu-latest — no
     # nested virtualization, same substrate kind/CNPG/Flux test on.
-    # Toolchain comes from flake.nix so CI and local runs exercise the
-    # same pinned binaries; only the Docker daemon is the runner's own.
+    # Every action the harness runs (docs/plans/02-week-two.md Revision 3,
+    # slice 6) is a flake package, so CI and local runs exercise the exact
+    # same pinned, shellcheck-verified binaries; only the Docker daemon is
+    # the runner's own.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v16
-      - run: nix develop --command ./scripts/acceptance-kind.sh
+      - run: nix run .#acceptance
