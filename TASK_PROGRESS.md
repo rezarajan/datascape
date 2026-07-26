@@ -437,6 +437,18 @@ code paths, wired into scripts/check.sh so CI's fast tier guards them. Week
 three stands fully closed: six of six exit criteria, all findings fixed or
 named. Owner: push (4 local commits).
 
+## Week four begun (2026-07-26) — plan APPROVED Revision 1 (`a6b29a6`)
+
+Ground: two owner directives verbatim in the plan (quickstart per-scenario
+isolation + manual route; THE MESH IS MANDATORY — external endpoints reached
+only through the mesh with permission). Flagged finding: the weekly plans'
+egress deferral contradicted Amendment 2's "compiled default-deny; v1 = declare
++ deny" — contract wins, deferral superseded. Approved answers: declared-
+endpoints-first deny breadth (namespace-wide deny-all is the named next step);
+manual route in companion WALKTHROUGH.md. Build order: slices 1+2 (egress
+compiler + allowedConsumers un-refusal on managed — dispatched), then 3
+(mesh-mandatory scenarios + negative egress probes), then 4 (docs).
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
