@@ -92,8 +92,12 @@ slice toward the Q3.1 skeleton in weeks 2–4.
       the refusal. Not re-demonstrated on every harness run — proven once, live.
 - [x] Golden files pin compiled output; two compiles are byte-identical.
 - [x] Arch test and commit-style gate green; both demonstrated able to fail.
-- [ ] First dogfood note recorded: time-to-stack measured against the <1 hour target
-      (Q2.1), on the owner's real request if one exists this week.
+- [x] First dogfood note recorded: time-to-stack measured against the <1 hour target
+      (Q2.1), on the owner's real request if one exists this week. **Verified
+      2026-07-26** — dogfood note 1 in `docs/dogfood.md`: an owner-attested real
+      request (internal service/API database), time-to-stack 2m08s vs the <1h target,
+      both probes live. Evidence caveats recorded in the note (kind substrate,
+      agent-driven operator, placeholder names).
 
 ### Environment prerequisites found by running the harness live (2026-07-26)
 

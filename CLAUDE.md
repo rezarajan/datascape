@@ -4,8 +4,10 @@ Successor to platformctl. **Problem definition SIGNED OFF 2026-07-25, AMENDED sa
 (Amendment 1: guarantees-compiler reframing; Amendment 2: trust-boundary model) —
 RE-SIGNED-OFF 2026-07-26** (`docs/discovery/00-problem-definition.md` — a contract).
 **Golden-rules review (Q3.4) done 2026-07-25**: 67/70 rules bind; see the dated
-amendment in `docs/foundations/golden-rules.md`. **Current phase: week-one artifact —
-plan at `docs/plans/01-week-one.md`, Revision A APPROVED 2026-07-26. Building now.**
+amendment in `docs/foundations/golden-rules.md`. **Current phase: dogfood
+(first dogfood week opened 2026-07-26; kill review due 2026-08-23, needs 2+ real
+stacks). Week-one artifact built and verified; all Revision A exit criteria met.
+Dogfood notes: `docs/dogfood.md` (record — appends need the unlock protocol).**
 
 ## The one invariant (this phase)
 

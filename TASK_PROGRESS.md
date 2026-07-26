@@ -193,6 +193,18 @@ off-mesh refusal, clean teardown). Both review findings from the first steward
 pass are now closed; the Flux-reconciliation harness wiring is scheduled week-two
 work per the owner decision.
 
+## Dogfood week opened; first note recorded (2026-07-26)
+
+Owner directed the dogfood start (setup selections recorded verbatim in
+`docs/dogfood.md`). Q1.1a denominator (5) recorded in the problem definition via the
+unlock protocol; team name still open. Dogfood note 1: internal-api stack
+(owner-attested real request, placeholder names), **time-to-stack 2m08s vs the <1h
+Q2.1 target**, positive mTLS probe + off-mesh refusal both live; stack left running
+on the local `d7s-dogfood` kind cluster. Four friction findings recorded in the note
+(no release binary; manual secret prereq; consumer identity not materialized; direct
+apply executes the DAG by hand — live evidence for the scheduled week-two Flux
+wiring). Last Revision A exit criterion checked off. Kill review due **2026-08-23**.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: team name + developer-customer count — record (privately if repo goes
