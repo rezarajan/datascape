@@ -17,6 +17,40 @@ type Namespace struct {
 	Metadata   ObjectMeta `yaml:"metadata"`
 }
 
+// ServiceAccount is a Kubernetes ServiceAccount.
+type ServiceAccount struct {
+	APIVersion string     `yaml:"apiVersion"`
+	Kind       string     `yaml:"kind"`
+	Metadata   ObjectMeta `yaml:"metadata"`
+}
+
+// RoleBinding is a Kubernetes rbac.authorization.k8s.io RoleBinding —
+// namespace-scoped, even though its RoleRef may name a cluster-scoped
+// ClusterRole (exactly how emitManagedRunnerRBAC uses it: scoping a
+// pre-existing, environment-provided ClusterRole's permissions to one
+// namespace, rather than granting them cluster-wide).
+type RoleBinding struct {
+	APIVersion string               `yaml:"apiVersion"`
+	Kind       string               `yaml:"kind"`
+	Metadata   ObjectMeta           `yaml:"metadata"`
+	RoleRef    RoleRef              `yaml:"roleRef"`
+	Subjects   []RoleBindingSubject `yaml:"subjects"`
+}
+
+// RoleRef is RoleBinding.roleRef.
+type RoleRef struct {
+	APIGroup string `yaml:"apiGroup"`
+	Kind     string `yaml:"kind"`
+	Name     string `yaml:"name"`
+}
+
+// RoleBindingSubject is one entry of RoleBinding.subjects.
+type RoleBindingSubject struct {
+	Kind      string `yaml:"kind"`
+	Name      string `yaml:"name"`
+	Namespace string `yaml:"namespace"`
+}
+
 // SourceRef points a Flux object at the Source it reads from.
 type SourceRef struct {
 	APIVersion string `yaml:"apiVersion,omitempty"`

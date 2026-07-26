@@ -131,6 +131,11 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 			return ports.Manifests{}, err
 		}
 	}
+	if len(managed) > 0 {
+		if err := emitManagedRunnerRBAC(files, stack.Name); err != nil {
+			return ports.Manifests{}, err
+		}
+	}
 	for _, pg := range selfHosted {
 		if err := emitSelfHostedPostgres(files, stack.Name, pg); err != nil {
 			return ports.Manifests{}, err

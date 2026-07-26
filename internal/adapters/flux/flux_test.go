@@ -380,6 +380,56 @@ func TestEmitManagedPlacementCarriesOwnershipLabels(t *testing.T) {
 	}
 }
 
+// TestEmitManagedPlacementCompilesRunnerServiceAccountAndRoleBinding
+// proves the tf-runner ServiceAccount and its RoleBinding are compiled
+// alongside the Terraform CR (found live, 2026-07-26: without them, the
+// runner pod fails outright - "serviceaccount \"tf-runner\" not found" -
+// and tofu-controller's own release RBAC only creates that ServiceAccount
+// in flux-system, not the stack's own namespace). The RoleBinding must
+// reference the tf-runner-role ClusterRole (an environment prerequisite,
+// scripts/actions/tofu-install.sh) by name, scoped to the stack's own
+// namespace, and carry the full ownership-label set like every other
+// emitted object (golden rule 27).
+func TestEmitManagedPlacementCompilesRunnerServiceAccountAndRoleBinding(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	sa := string(manifests.Files["apps/week-one/tf-runner-serviceaccount.yaml"])
+	if !strings.Contains(sa, "kind: ServiceAccount") ||
+		!strings.Contains(sa, "name: tf-runner") ||
+		!strings.Contains(sa, "namespace: week-one") ||
+		!strings.Contains(sa, "d7s.dev/managed-by: d7s") ||
+		!strings.Contains(sa, "d7s.dev/stack: week-one") {
+		t.Errorf("tf-runner ServiceAccount not compiled as expected:\n%s", sa)
+	}
+	rb := string(manifests.Files["apps/week-one/tf-runner-rolebinding.yaml"])
+	if !strings.Contains(rb, "kind: RoleBinding") ||
+		!strings.Contains(rb, "kind: ClusterRole") ||
+		!strings.Contains(rb, "name: tf-runner-role") ||
+		!strings.Contains(rb, "name: tf-runner") ||
+		!strings.Contains(rb, "namespace: week-one") ||
+		!strings.Contains(rb, "d7s.dev/managed-by: d7s") {
+		t.Errorf("tf-runner RoleBinding not compiled as expected:\n%s", rb)
+	}
+}
+
+// TestEmitSelfHostedPlacementNeverCompilesRunnerRBAC proves the tf-runner
+// wiring is managed-only: a self-hosted-only stack has no Terraform CR
+// and no runner pod to need it, so compiling it would be a dangling
+// object nothing consumes (golden rule 24's spirit).
+func TestEmitSelfHostedPlacementNeverCompilesRunnerRBAC(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for path := range manifests.Files {
+		if strings.Contains(path, "tf-runner") {
+			t.Errorf("emitted %s for a self-hosted-only stack with no managed component", path)
+		}
+	}
+}
+
 // TestEmitManagedPlacementNeverInlinesAPIKey proves the emitted Terraform
 // CR and OpenTofu config never carry a literal Neon API key value
 // (golden rule 51): the key is always a Secret reference, resolved at
@@ -396,6 +446,125 @@ func TestEmitManagedPlacementNeverInlinesAPIKey(t *testing.T) {
 	tfConfig := string(manifests.Files["apps/week-one/orders-db-managed/main.tf"])
 	if strings.Contains(tfConfig, "api_key") {
 		t.Errorf("OpenTofu config carries an api_key argument — the key must come only from the runner pod's environment:\n%s", tfConfig)
+	}
+}
+
+// TestEmitManagedPlacementNeverInlinesProjectID proves the emitted
+// Terraform CR and OpenTofu config never carry a literal Neon project id
+// (week-two plan Revision 4): the project is a declared environment
+// prerequisite, exactly like the Kubernetes cluster itself, and baking
+// its id into compiled output would break determinism across
+// environments (golden rules 22, 45). It is always a Terraform variable,
+// supplied at runtime via the Terraform CR's varsFrom from the same
+// neon-api-key Secret the API key comes from.
+func TestEmitManagedPlacementNeverInlinesProjectID(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	tf := string(manifests.Files["apps/week-one/orders-db-terraform.yaml"])
+	if !strings.Contains(tf, "varsFrom") ||
+		!strings.Contains(tf, "name: neon-api-key") ||
+		!strings.Contains(tf, "projectId:project_id") {
+		t.Errorf("Terraform CR does not surface the Neon project id from the neon-api-key Secret via varsFrom:\n%s", tf)
+	}
+	tfConfig := string(manifests.Files["apps/week-one/orders-db-managed/main.tf"])
+	if !strings.Contains(tfConfig, `variable "project_id"`) {
+		t.Errorf("OpenTofu config does not declare a project_id variable:\n%s", tfConfig)
+	}
+	if !strings.Contains(tfConfig, "var.project_id") {
+		t.Errorf("OpenTofu config does not reference var.project_id:\n%s", tfConfig)
+	}
+	// No project id ever compiled as a literal (the domain layer has no
+	// project id to leak, so this also guards against a future field
+	// being wired in as a literal by mistake).
+	if strings.Contains(tfConfig, `resource "neon_project"`) {
+		t.Errorf("OpenTofu config still declares a neon_project resource — Revision 4 supersedes project-per-stack with branch-per-stack:\n%s", tfConfig)
+	}
+}
+
+// TestEmitManagedPlacementWritesOutputsToDeclaredCredentialsSecret proves
+// the credentials-wiring fix (week-two plan slice 5, 2026-07-26):
+// writeOutputsToSecret targets the component's DECLARED
+// credentials.secretRef.name, not some other fixed or invented name —
+// closing the gap that left Credentials.Name unconsumed for managed
+// placement.
+func TestEmitManagedPlacementWritesOutputsToDeclaredCredentialsSecret(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	tf := string(manifests.Files["apps/week-one/orders-db-terraform.yaml"])
+	if !strings.Contains(tf, "writeOutputsToSecret:") || !strings.Contains(tf, "name: orders-db-app") {
+		t.Errorf("Terraform CR does not write outputs to the declared credentials secret (orders-db-app):\n%s", tf)
+	}
+}
+
+// TestEmitManagedPlacementNeverSetsDestroyResourcesOnDeletion proves
+// retain-by-default (golden rule 28): the compiled CR must never set
+// destroyResourcesOnDeletion — deleting compiled output must not destroy
+// a data-bearing managed database. Only the acceptance harness, as an
+// explicit operator act at teardown, may enable it on a running CR.
+func TestEmitManagedPlacementNeverSetsDestroyResourcesOnDeletion(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	tf := string(manifests.Files["apps/week-one/orders-db-terraform.yaml"])
+	if strings.Contains(tf, "destroyResourcesOnDeletion") {
+		t.Errorf("compiled Terraform CR must never set destroyResourcesOnDeletion (golden rule 28):\n%s", tf)
+	}
+}
+
+// TestEmitManagedPlacementDeclaresConnectionOutputs proves the OpenTofu
+// config declares exactly the outputs a consumer needs to connect (host,
+// port, database, username, password), with the password marked
+// sensitive — the shape tofu-controller's writeOutputsToSecret turns
+// into the credentials secret's data keys.
+func TestEmitManagedPlacementDeclaresConnectionOutputs(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	tfConfig := string(manifests.Files["apps/week-one/orders-db-managed/main.tf"])
+	for _, want := range []string{
+		`output "host"`,
+		`output "port"`,
+		`output "database"`,
+		`output "username"`,
+		`output "password"`,
+	} {
+		if !strings.Contains(tfConfig, want) {
+			t.Errorf("OpenTofu config is missing %s:\n%s", want, tfConfig)
+		}
+	}
+	if !strings.Contains(tfConfig, "sensitive = true") {
+		t.Errorf("OpenTofu config does not mark the password output sensitive:\n%s", tfConfig)
+	}
+}
+
+// TestEmitManagedPlacementOrdersRoleAfterEndpoint proves neon_role
+// declares an explicit depends_on against neon_endpoint (found live,
+// 2026-07-26): the two resources share no attribute reference, so
+// without this edge OpenTofu creates and destroys them in parallel -
+// reproducibly breaking both directions against the real Neon API
+// (create: "no read-write endpoint for branch"; destroy: "unexpected end
+// of JSON input" from the provider's SDK). Confirmed by removing the edge
+// and reproducing both failures twice, then restoring it and succeeding
+// twice, against the real API - not a guess.
+func TestEmitManagedPlacementOrdersRoleAfterEndpoint(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	tfConfig := string(manifests.Files["apps/week-one/orders-db-managed/main.tf"])
+	roleIdx := strings.Index(tfConfig, `resource "neon_role"`)
+	if roleIdx < 0 {
+		t.Fatalf("OpenTofu config has no neon_role resource:\n%s", tfConfig)
+	}
+	roleBlock := tfConfig[roleIdx:]
+	if !strings.Contains(roleBlock, "depends_on") || !strings.Contains(roleBlock, "neon_endpoint.orders-db") {
+		t.Errorf("neon_role does not depend_on neon_endpoint:\n%s", roleBlock)
 	}
 }
 

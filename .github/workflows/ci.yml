@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   fast:
@@ -33,3 +34,32 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v16
       - run: nix run .#acceptance
+
+  acceptance-managed:
+    name: acceptance (managed / neon)
+    runs-on: ubuntu-latest
+    # A real external service (Neon), not a cluster this runner conjures
+    # from nothing — you cannot expect it to always be available for CI
+    # (owner directive, week-two plan Revision 3). Runs only where a
+    # cluster AND the NEON_API_KEY secret are both real: push to main or
+    # manual dispatch, never a pull_request (fork PRs never receive
+    # secrets at all — GitHub withholds them; this condition also skips
+    # same-repo PRs, keeping the tier to the two triggers the plan names).
+    # Secrets aren't readable in `if:` directly, so the standard pattern
+    # is to map the secret into env and gate on emptiness inside the step
+    # — a SKIPPED report, never a silent pass (rule 49).
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - name: run managed acceptance, or report SKIPPED when the secret is absent
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          if [ -z "$NEON_API_KEY" ]; then
+            echo "SKIPPED (unknown): NEON_API_KEY repository secret not set — managed seam NOT verified this run" >&2
+            echo "remedy: set the NEON_API_KEY repository secret to run this tier" >&2
+            exit 0
+          fi
+          nix run .#acceptance-managed

@@ -94,7 +94,16 @@ mkdir -p "$GITCONTENT_DIR/repo/out"
 cp -r "$OUT"/. "$GITCONTENT_DIR/repo/out/"
 git -C "$GITCONTENT_DIR/repo" -c init.defaultBranch=main init -q
 git -C "$GITCONTENT_DIR/repo" add -A
+# commit.gpgsign=false is scoped to ONLY this throwaway scratch repo (a
+# -c override on this one invocation, never the developer's global git
+# config): it is harness scaffolding pushed to an in-cluster git server
+# for Flux to clone, never project history, so it needs no signature -
+# and requiring one made every run depend on the developer's gpg-agent
+# for something that isn't the developer's commit at all (found live,
+# 2026-07-26: a stale gpg-agent cache blocked this step with no bearing
+# on the actual product commit).
 git -C "$GITCONTENT_DIR/repo" -c user.email=harness@d7s.dev -c user.name=d7s-harness \
+	-c commit.gpgsign=false \
 	commit -q -m "compiled output (acceptance harness run)"
 # kubectl cp's tar-based extraction lands at
 # <dest-dirname>/<src-basename> - naming the local bare clone "d7s.git"

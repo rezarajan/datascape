@@ -122,6 +122,72 @@
               teardown
             ]
             ./scripts/actions/acceptance.sh;
+
+          # --- managed/Neon scenario (docs/plans/02-week-two.md
+          # Revision 3, slice 5) — a separate composed entry point from
+          # `acceptance` above, not chained after it: see
+          # scripts/actions/acceptance-managed.sh for why.
+
+          tofu-install = action "tofu-install"
+            (with pkgs; [
+              kubectl
+              curl
+              gnugrep
+              gnused
+              coreutils
+            ])
+            ./scripts/actions/tofu-install.sh;
+
+          # curl/jq/gnugrep: discover_neon_project_id's Neon-API discovery
+          # call (week-two plan Revision 4) - shared by neon-secret,
+          # teardown-managed, and acceptance-managed below.
+          neon-secret = action "neon-secret"
+            (with pkgs; [
+              kubectl
+              curl
+              jq
+              gnugrep
+            ])
+            ./scripts/actions/neon-secret.sh;
+
+          compile-managed = action "compile-managed" [ compile-and-verify ] ./scripts/actions/compile-managed.sh;
+
+          deliver-managed = action "deliver-managed"
+            (with pkgs; [
+              kubectl
+              fluxcd
+              coreutils
+              neon-secret
+            ])
+            ./scripts/actions/deliver-managed.sh;
+
+          probe-managed = action "probe-managed" (with pkgs; [ kubectl coreutils ]) ./scripts/actions/probe-managed.sh;
+
+          teardown-managed = action "teardown-managed"
+            (with pkgs; [
+              kubectl
+              curl
+              jq
+              gnugrep
+              teardown
+            ])
+            ./scripts/actions/teardown-managed.sh;
+
+          acceptance-managed = action "acceptance-managed"
+            (with pkgs; [
+              curl
+              jq
+              gnugrep
+              compile-managed
+              cluster-up
+              tofu-install
+              flux-install
+              git-source
+              deliver-managed
+              probe-managed
+              teardown-managed
+            ])
+            ./scripts/actions/acceptance-managed.sh;
         }
       );
 

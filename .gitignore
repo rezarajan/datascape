@@ -12,3 +12,7 @@
 
 # Compile output (the acceptance scenario's `d7s compile -o ./out`).
 /out/
+/out-managed/
+
+# Keep env out of git
+.env

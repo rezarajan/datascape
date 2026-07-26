@@ -7,21 +7,7 @@
 require_repo_root
 
 log "flux: git push  # register the git source, named/namespaced for the emitter's sourceRef"
-kubectl apply -f - <<EOF
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: GitRepository
-metadata:
-  name: d7s
-  namespace: flux-system
-spec:
-  interval: 1m
-  url: http://d7s-gitserver.$GITSERVER_NS.svc.cluster.local/d7s.git
-  ref:
-    branch: main
-EOF
-poll "GitRepository d7s ready (flux cloned the git source)" bash -c \
-	"flux reconcile source git d7s -n flux-system >/dev/null 2>&1; \
-	 [ \"\$(kubectl get gitrepository d7s -n flux-system -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)\" = 'True' ]"
+register_git_source
 
 log "apply ONLY the emitted Flux Kustomization CRs - kustomize-controller/helm-controller reconcile the rest"
 kubectl apply -f "$OUT/flux/infra-cnpg-operator.yaml"

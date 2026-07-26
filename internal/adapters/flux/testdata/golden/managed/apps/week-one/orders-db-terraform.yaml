@@ -23,3 +23,10 @@ spec:
             secretKeyRef:
               name: neon-api-key
               key: apiKey
+  varsFrom:
+    - kind: Secret
+      name: neon-api-key
+      varsKeys:
+        - projectId:project_id
+  writeOutputsToSecret:
+    name: orders-db-app
