@@ -134,3 +134,35 @@ as **approved with that one change (Revision 1)**, amended here:
   is the owner's stated rationale; flipping to the paid endpoint later should be a
   config change, and doing it once before any public claim is the whitepaper rule's
   receipt.
+
+## Slice-1 findings round — 2026-07-26 (→ Revision 2)
+
+Slice 1's feasibility spike (findings recorded in `TASK_PROGRESS.md`, 2026-07-26)
+established: tofu-controller is pinnable (moderate risk, OpenTofu-first since
+v0.16.0); no local Neon control-plane API exists (the official "Neon Local" image
+is a cloud proxy; the open-source local path has no HTTP management API); and every
+Neon Terraform provider hard-codes `console.neon.tech`. The Revision 1 directive
+("bootstrap neon locally + simulate") therefore costs a fake control plane plus
+DNS/TLS interception or a vendored provider fork.
+
+Put back to the owner with those findings; answer recorded verbatim: **"Neon free
+tier, real endpoint (Recommended)"** — zero cost via the free tier, the real
+provider path, no simulation machinery.
+
+**Finding (flagged): this supersedes Revision 1's local-bootstrap directive** — a
+reversal made with fuller information; both texts stand in this record. Revision 2
+amendments:
+
+- Exit criteria revert to the real endpoint, at zero cost: **a real Neon free-tier
+  database is provisioned** through the emitted `Terraform` CR; the harness requires
+  network access and a free-account API key in the `neon-api-key` secret (name
+  stands from Revision 1); teardown destroys harness-created Neon resources (free
+  tier's project limits make leaks operational defects, not just cost ones).
+- The simulation/shim work is dead, not deferred — no home needed.
+- Slice 1 is COMPLETE: health verdict recorded (pin an exact tofu-controller tag;
+  watch for maintenance lapses; OpenTofu is the engine), local-Neon question closed.
+- **Slices 2 and 3 execute as one coherent slice:** removing the `managed` refusal
+  while mesh-guarantee declarations could still reach the emitter would create an
+  inconsistent fail-open state between commits; the `mtls`+`managed` refusal must
+  land in the same commit that opens the managed path (rules 34/37/50). Recorded
+  here as a deliberate build-order adjustment, not a silent one.
