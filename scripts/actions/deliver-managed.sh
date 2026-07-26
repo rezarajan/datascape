@@ -7,7 +7,15 @@
 # the same discipline as the self-hosted scenario's deliver action
 # (docs/plans/02-week-two.md, slice 5: "the SAME git-source + Flux path
 # as the self-hosted scenario").
+#
+# require_gitserver_prereq (scripts/lib/common.sh): this action registers
+# a git source exactly like deliver.sh does, and hits the identical trap
+# without it - the GitRepository DNS-fails silently through
+# register_git_source's whole bounded poll budget instead of naming the
+# missing prerequisite. Fail closed with the remedy instead, before ever
+# registering the GitRepository.
 require_repo_root
+require_gitserver_prereq
 
 log "flux: git push  # register the git source, named/namespaced for the emitter's sourceRef"
 register_git_source

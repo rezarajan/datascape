@@ -130,7 +130,11 @@ read these, not your YAML.
   one.
 - **A `GitRepository` registered with Flux**, pointing at wherever you pushed
   `out/` — the emitted Kustomizations name it as their `sourceRef`, they don't
-  create it themselves.
+  create it themselves (`nix run .#git-source` stands up the harness's own
+  in-cluster git source and pushes `out/` to it; `deliver`/`deliver-managed`
+  register the `GitRepository` against it and refuse with a remedy if it's
+  missing, rather than leaving Flux to DNS-fail silently through a bounded
+  wait).
 - **A `StorageClass` with `reclaimPolicy: Retain`**, if you need data volumes
   retained after a component is removed from the declaration — this is purely a
   cluster-provided `StorageClass` property; d7s can't safely guess your CSI

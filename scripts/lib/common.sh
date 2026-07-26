@@ -141,6 +141,10 @@ poll_n() {
 	# `poll`'s own default budget with). `poll` below is the common case.
 	local attempts="$1" interval="$2" desc="$3"
 	shift 3
+	# Announce the wait as it starts, not only on timeout (found live: a
+	# bounded poll that only speaks up at the end reads as a silent hang to
+	# a human operator - one line, no spinner, same discipline as `log`).
+	echo "waiting (bounded): $desc" >&2
 	local i
 	for ((i = 1; i <= attempts; i++)); do
 		if "$@"; then
@@ -213,6 +217,25 @@ require_minio_prereq() {
 	# Fail closed with the remedy instead (rules 34, 35, 49).
 	if ! kubectl get namespace "$MINIO_NS" >/dev/null 2>&1 || ! kubectl get deployment minio -n "$MINIO_NS" >/dev/null 2>&1; then
 		echo "refusing to deliver: MinIO not found (namespace $MINIO_NS / deployment minio) - MinIO is a harness prerequisite for this stack's durability guarantee - remedy: run 'nix run .#minio-install' first; the 'nix run .#acceptance' orchestrator does this for you" >&2
+		exit 1
+	fi
+}
+
+# shellcheck disable=SC2329 # shared helper - deliver.sh and
+# deliver-managed.sh both call this (both call register_git_source)
+require_gitserver_prereq() {
+	# register_git_source (below) applies a GitRepository naming the
+	# in-cluster git server git-source stands up - without it, the
+	# GitRepository just sits un-Ready, DNS-failing on
+	# d7s-gitserver.$GITSERVER_NS.svc (the namespace doesn't even exist),
+	# which register_git_source's own poll then waits out its full
+	# bounded budget for - reading as a silent hang to a human, one step
+	# over from dogfood note 3's MinIO trap (docs/dogfood.md,
+	# 2026-07-26) - same class of bug, found live on the same piecemeal
+	# path. Fail closed with the remedy instead (rules 34, 35), before
+	# ever registering the GitRepository.
+	if ! kubectl get namespace "$GITSERVER_NS" >/dev/null 2>&1 || ! kubectl get deployment d7s-gitserver -n "$GITSERVER_NS" >/dev/null 2>&1; then
+		echo "refusing to deliver: the in-cluster git source is not found (namespace $GITSERVER_NS / deployment d7s-gitserver) - the in-cluster git source is a prerequisite - remedy: run 'nix run .#git-source' first; the orchestrators do this for you" >&2
 		exit 1
 	fi
 }
