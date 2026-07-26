@@ -388,10 +388,12 @@ picks the developer. Kill review 2026-08-23.
   domain coverage). Schema change: `rpo` is now `{target, backupTo}`; refusals
   re-shaped with remedies naming the `external` block. All four test tiers green;
   contract review clean on code surfaces and notes the rule-9 watch item CLOSED
-  by the compiler-core comment/structure. Three findings in one fix round (in
-  progress): stale harness bad-rpo fixture (would fail CI on push — blocks
-  pushing until fixed), stale QUICKSTART rpo note, and comments claiming a
-  flux-level test that didn't exist.
+  by the compiler-core comment/structure. Three findings fixed and ACCEPTED
+  (`921db90`): harness bad-rpo fixture reshaped to a real refusal (CI-safe —
+  push unblocked), QUICKSTART rpo note now current truth, the claimed
+  flux-level test now exists and passes. Slice 3 (live backup-completed probe
+  vs harness MinIO; guarantee composition mtls+rpo on one component)
+  dispatched.
 
 ## Open items owned by the owner
 
