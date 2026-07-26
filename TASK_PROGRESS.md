@@ -77,6 +77,36 @@ durability compile-time checks) is verified live; everything requiring a live
 Kubernetes API is not. Reported to the owner rather than silently adapting scope
 (agentic-development §5) or marking exit criteria done from memory (rule 58).
 
+## Finding correction: veth failure is a pending-reboot kernel issue, not a sandbox restriction (2026-07-26)
+
+Re-diagnosed with the owner. The `operation not supported` on veth-pair creation
+reproduces **outside** the command sandbox (`docker run --rm alpine ip link` fails
+identically against the host daemon), so it is not a sandbox restriction. Root cause:
+the host is running kernel `7.1.3-2-cachyos`, but `/lib/modules/` contains only
+`6.18.38-2-cachyos-lts` and `7.1.4-1-cachyos` — the kernel package was upgraded after
+boot, deleting the running kernel's module tree. The `veth` module was not loaded at
+the time (`modinfo veth`: module not found) and can no longer be loaded, so Docker
+cannot create container network endpoints. **Resolution: reboot the host** (into
+7.1.4), then re-verify with `docker run --rm alpine ip link`.
+
+Two consequences for the earlier finding:
+
+- `minikube --driver=none` would **also** have failed — pod networking via CNI creates
+  veth pairs too. Not attempting it was correct, and it is off the table regardless.
+- No sandbox constraint exists, so the harness needs no exotic substrate.
+
+**Decision for task 8 (owner-directed re-plan): kind, locally and in CI, same
+script.** Rationale recorded: kind is conformant Kubernetes in Docker and is what
+CNPG's and Flux's own test suites run on; it runs unchanged on GitHub Actions
+`ubuntu-latest` (native Docker, no nested virtualization); node image pinning gives a
+reproducible cluster version; create/teardown per run keeps it ephemeral.
+Vagrant+Talos was considered and rejected for this phase: it needs KVM/libvirt
+locally and in CI, is slower and heavier, and buys nothing while the guarantees under
+test (mTLS wiring, ScheduledBackup firing, CNPG admission of the
+`barmanObjectStore`-less shape) are Kubernetes-API-level, not host-OS-level.
+Note: `kind` is not yet installed (nix profile has minikube/kubectl/flux) — add it
+alongside the harness.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: team name + developer-customer count — record (privately if repo goes
