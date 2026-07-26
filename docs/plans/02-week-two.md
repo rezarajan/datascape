@@ -207,3 +207,33 @@ clears review; slice numbering continues):**
     itself as SKIPPED/unknown in the job output — never as coverage (rule 49); an
     unreachable external service fails that tier with the remedy, without
     poisoning the tiers that need no network.
+
+## Slice-5 blocker round — 2026-07-26 (→ Revision 4: branch-per-stack)
+
+Slice 5 stopped at the smallest consistent state (§5): the owner's `.env` key is a
+**project-scoped** Neon key, which Neon structurally forbids from creating projects
+(verified live: `404 project-scoped keys are not allowed to create projects`; the
+key is locked to the pre-existing "datascape" project). The approved design
+compiled a project per stack. Put to the owner with three options; answer recorded
+verbatim: **"Branch-per-stack in your project (Recommended)"**.
+
+**Revision 4 synthesis (supersedes the managed emitter's resource set):**
+
+- **The Neon PROJECT is an environment prerequisite**, exactly like the Kubernetes
+  cluster itself — d7s never creates or destroys it. The compiled resource set
+  becomes **branch + database + role inside the prerequisite project** (Neon's own
+  branch-centric model; least-privilege: CI holds only a project-scoped key,
+  never org-wide credentials).
+- **The project id never appears in compiled output** — it is an environment
+  binding, and baking it in would break determinism across environments (rules
+  22/45). It enters at runtime alongside the API key: the `neon-api-key` Secret
+  gains a `projectId` key, surfaced to the OpenTofu config as a variable via the
+  Terraform CR (`varsFrom`), the same trust path as the key itself.
+- **Retain-by-default (rule 28) applies to branches** — they are data-bearing;
+  compiled output never enables destruction. Harness teardown patches, deletes,
+  and verifies **branch** deletion via the Neon API (a project-scoped key may
+  manage branches); a leaked branch is a harness defect.
+- The `org_id` provider wrinkle found behind the key blocker is moot (no project
+  creation), and the exit criteria's "real Neon database" now reads: a real
+  branch + database in the prerequisite project, provisioned and destroyed per
+  harness run.
