@@ -363,6 +363,17 @@ stacks recorded, caveats in the dogfood record.** Remaining owner item: push
 main (first CI run of the full flake-gated pipeline; add NEON_API_KEY repo
 secret for the managed tier).
 
+## Week three begun (2026-07-26) — plan APPROVED Revision 1 (`8be0f82`)
+
+Scope: durability triple whole via `external` object-store declaration (rpo
+compiles labeled CONDITIONAL, Amendment 2's shape; "both, external first" — the
+compiled component stays skeleton scope, owner-affirmed); live backup-completion
+probe; emitted `healthChecks`; nix quick-start with built `d7s` in the dev shell;
+note-2 operator affordances. Dispatched: slices 1+2 (external + durability
+compile) and slice 5 (quick-start) in parallel on disjoint surfaces. Teammate
+cold run (dogfood note 3) scheduled mid-week once quick-start lands — owner
+picks the developer. Kill review 2026-08-23.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
