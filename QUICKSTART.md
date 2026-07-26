@@ -109,9 +109,12 @@ registers the `GitRepository` for you — but that's the same one-per-cluster
 registration the self-hosted flow needs (see the prerequisite below); if you're
 driving the managed scenario by hand instead of through these actions, you still
 need it registered, pointing at wherever you pushed the compiled `out/`, before
-Flux can reconcile the Terraform CR at all. The component name and the
-credentials Secret name both come from your own declaration, not a hardcoded
-default — nothing in this scenario assumes a specific stack.
+Flux can reconcile the Terraform CR at all. If your component isn't named
+`orders-db` (the example's name, and the default), tell the actions about yours
+via environment variables: `MANAGED_STACK` (your declaration file),
+`MANAGED_NAMESPACE` (your stack name), `MANAGED_COMPONENT` (your component name),
+and `MANAGED_CREDENTIALS_SECRET` (your declared credentials secret) — the actions
+read these, not your YAML.
 
 ### Environment prerequisites (not compiled by d7s — you provide these)
 

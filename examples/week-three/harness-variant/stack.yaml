@@ -1,4 +1,6 @@
-# harness-variant - week-three plan Revision 1, slice 6's demonstration
+# harness-variant (a harness demonstration fixture, NOT a dogfood stack -
+# the dogfood record vouches only for what lives under dogfood/) -
+# week-three plan Revision 1, slice 6's demonstration
 # fixture: closes dogfood note 2 finding 1 ("the managed harness actions
 # hardcode the example component name") by proving the managed harness
 # (compile-managed/deliver-managed/probe-managed/teardown-managed/
