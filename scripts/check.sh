@@ -23,4 +23,7 @@ go build ./...
 echo "==> go test"
 go test ./...
 
+echo "==> harness prereq-refusal conformance (cluster-free, no network)"
+./scripts/tests/prereq-refusals.sh
+
 echo "fast tier green"
