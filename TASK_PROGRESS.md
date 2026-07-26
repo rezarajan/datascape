@@ -205,11 +205,22 @@ on the local `d7s-dogfood` kind cluster. Four friction findings recorded in the 
 apply executes the DAG by hand — live evidence for the scheduled week-two Flux
 wiring). Last Revision A exit criterion checked off. Kill review due **2026-08-23**.
 
+## Managed-emit decided; week-two plan drafted (2026-07-26)
+
+Owner decision round (verbatim selections recorded in `docs/plans/01-week-one.md`):
+managed emit = **tofu-controller `Terraform` CR**; seam provider = **Neon** (with
+its recorded caveat); week-two planning = draft now. `docs/plans/02-week-two.md`
+created as **DRAFT Revision 0, awaiting owner approval** — no product code from it
+until approved. Key plan shape: mtls+managed refuses (mesh guarantee doesn't cross
+the seam), rpo still refuses everywhere, Flux-path harness wiring un-narrows the
+week-one claims, Neon teardown verified in the harness.
+
 ## Open items owned by the owner
 
-- **Q1.1a**: team name + developer-customer count — record (privately if repo goes
-  public) before the first dogfood week, so adoption claims have a denominator. Still
-  open as of 2026-07-26.
-- **Managed-emit artifact** (deferred at Revision A approval, blocks week two only):
-  Flux tf-controller `Terraform` CR (recommended) vs plain Terraform module vs
-  Crossplane claim.
+- **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
+  unrecorded — the open sliver, flagged in the problem definition.
+- **Week-two plan approval**: `docs/plans/02-week-two.md` DRAFT Revision 0, plus its
+  three at-approval questions (Neon account/API-key secret; teardown vs persistent
+  dogfood stack; whether the managed proof doubles as dogfood note 2).
+- **Push main**: 12+ local commits unpushed; first real run of the flake-wired CI
+  acceptance job waits on it.

@@ -198,6 +198,19 @@ Wiring a real git source into the harness becomes a scheduled week-two item, whe
 the delivery plane matters for the managed seam anyway. Unblocks dogfood
 immediately."*
 
+**Q3 — managed-emit artifact (deferred at Revision A approval; decided in a second
+round the same day, 2026-07-26).** Owner selected: **"tf-controller Terraform CR
+(Recommended)"** — d7s emits a Flux tofu-controller (ex-tf-controller) `Terraform`
+CR; Flux stays the single delivery plane; the controller becomes an environment
+prerequisite and its post-Weaveworks community health gets checked in the week-two
+plan draft. In the same round the owner selected the seam-proof provider: **"Neon
+(serverless PG)"** — whose option text carried this caveat, recorded verbatim:
+*"Cheapest/fastest to stand up and has a Terraform provider; weakest fit if your
+production reality is a big-cloud VPC. Reasonable if the team's real managed choice
+is undecided."* — and chose **"Draft plan now, I review it"** for week-two planning.
+The week-two blocker above is therefore RESOLVED; scope moves to
+`docs/plans/02-week-two.md` (DRAFT until owner approval).
+
 **Synthesis (supersedes the marked items above; earlier text kept, not erased):**
 
 - Revision A item 1's durability triple **does not ship in week one's output**.
