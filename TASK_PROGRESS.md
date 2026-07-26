@@ -1,8 +1,8 @@
 # TASK_PROGRESS — solution setup + week-one plan
 
-Resumability file per `docs/foundations/agentic-development.md` §4. Branch:
-`claude/datascape-project-kickoff-ai83d9`. A session resuming this task needs only this
-file plus `git log`.
+Resumability file per `docs/foundations/agentic-development.md` §4. Branch: `main`
+(commits land directly here this session; no feature branch in use). A session
+resuming this task needs only this file plus `git log`.
 
 ## Step plan and status
 
@@ -49,10 +49,12 @@ file plus `git log`.
      remedy) — COMPLETE (`6f7b1cc`). No `barmanObjectStore` destination is emitted —
      v1 has no object-storage component/`external` declaration to resolve one from;
      flagged as a finding for the live acceptance run.
-   - (f) Acceptance harness on kind — **BLOCKED, not started.** See finding below.
-     This is the exit-criteria checklist item (rule 58: verified by running, never
-     from memory) — none of it is checked off yet, and none of the guarantee triples'
-     "conformance probe" leg has been proven against a real cluster.
+   - (f) Acceptance harness on kind — **COMPLETE** (`4b2a72c`, `a2afe97`). Was blocked,
+     then unblocked — see findings below. `scripts/acceptance-kind.sh` runs the full
+     documented scenario end to end with no manual steps and ephemeral teardown;
+     wired into CI as a separate deep-tier job (`.github/workflows/ci.yml`). All
+     Revision A exit criteria checked off in `docs/plans/01-week-one.md` except the
+     dogfood-timing note, which needs a real owner request.
 
 ## Finding: kind/minikube cannot run in this sandbox (2026-07-26)
 
@@ -106,6 +108,47 @@ test (mTLS wiring, ScheduledBackup firing, CNPG admission of the
 `barmanObjectStore`-less shape) are Kubernetes-API-level, not host-OS-level.
 Note: `kind` is not yet installed (nix profile has minikube/kubectl/flux) — add it
 alongside the harness.
+
+## Finding resolution: acceptance harness green, two live-caught composition bugs fixed (2026-07-26)
+
+kind (v1.36.1 node image), Flux, and Istio ambient all installed cleanly once the
+kernel issue was resolved. Running the full scenario live surfaced three real
+findings, none of them visible from `go test` alone (golden rule 40):
+
+1. **Credentials secret must pre-exist.** CNPG's `bootstrap.initdb.secret` only
+   consumes a pre-existing Secret; it does not generate one for a caller-supplied
+   name. The role/database were created with no password until the secret existed
+   first. Documented in `internal/domain/secret.go` and as a harness prerequisite.
+2. **AuthorizationPolicy blocked CNPG's own operator traffic** (commit `4b2a72c`).
+   The unscoped allow-list also gated the operator's instance-status polling
+   (port 8000), not just Postgres (5432) — a rule-42 composition bug (a security
+   feature and a durability feature were mutually destructive). Fixed by scoping
+   consumer rules to port 5432 and adding a separate operator-namespace rule scoped
+   to port 8000 only.
+3. **The operator's own namespace needed the ambient label too.** Scoping the
+   AuthorizationPolicy alone didn't fix it: PeerAuthentication enforces STRICT mTLS at
+   the transport layer, before AuthorizationPolicy is ever evaluated, so a client
+   outside the ambient mesh can't originate the connection regardless of policy.
+   `cnpg-system` now joins the ambient mesh whenever any component declares `mtls`.
+4. **PVC retention-on-delete needs a `Retain`-policy StorageClass** — CNPG has no
+   field of its own for this; it's purely a `StorageClass` property, and d7s can't
+   safely guess a real cluster's CSI provisioner to compile one (rule 15). Verified
+   live that the mechanism works when the prerequisite is met (PV left `Released`,
+   not deleted). **Owner decision, 2026-07-26:** document as an environment
+   prerequisite this week rather than add schema scope; revisit with placement/storage
+   design later. Recorded in `docs/plans/01-week-one.md`.
+
+After all three fixes, one clean run of `scripts/acceptance-kind.sh` passes every
+check together: positive mTLS probe, an undeclared in-mesh identity refused, an
+off-mesh plaintext client refused, the CNPG operator still reaching "Cluster in
+healthy state", the unsatisfiable-RPO compile-time refusal, determinism, and the
+durability probe (a `Backup` object appears, failing only on the documented,
+deferred object-storage gap). Golden files, tests, and code comments updated to
+match; commits `4b2a72c` and `a2afe97`.
+
+**Process note:** mid-session, GPG commit signing hung on pinentry (gpg-agent
+passphrase cache expired) — held rather than bypassing with `--no-gpg-sign`; the
+owner unlocked their agent out of band and signing resumed normally.
 
 ## Open items owned by the owner
 
