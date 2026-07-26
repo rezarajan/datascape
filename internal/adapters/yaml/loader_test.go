@@ -3,7 +3,6 @@ package yaml_test
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rezarajan/datascape/internal/adapters/yaml"
 	"github.com/rezarajan/datascape/internal/domain"
@@ -22,7 +21,6 @@ components:
         name: orders-db-app
     guarantees:
       mtls: {}
-      rpo: 1h
     allowedConsumers:
       - serviceAccount: probe-client
 `
@@ -45,8 +43,8 @@ func TestLoadValidDocument(t *testing.T) {
 	if pg.Guarantees.MTLS == nil {
 		t.Error("expected mtls guarantee to be declared")
 	}
-	if pg.Guarantees.RPO == nil || pg.Guarantees.RPO.Target != time.Hour {
-		t.Errorf("expected rpo guarantee of 1h, got %+v", pg.Guarantees.RPO)
+	if pg.Guarantees.RPO != nil {
+		t.Errorf("expected no rpo guarantee declared, got %+v", pg.Guarantees.RPO)
 	}
 	if pg.Credentials.Name != "orders-db-app" {
 		t.Errorf("credentials name = %q, want orders-db-app", pg.Credentials.Name)
@@ -88,7 +86,7 @@ func TestLoadUnknownComponentKindRefused(t *testing.T) {
 }
 
 func TestLoadInvalidRPODurationRefused(t *testing.T) {
-	doc := strings.Replace(validDoc, "rpo: 1h", "rpo: not-a-duration", 1)
+	doc := strings.Replace(validDoc, "mtls: {}", "mtls: {}\n      rpo: not-a-duration", 1)
 	if _, err := yaml.New().Load([]byte(doc)); err == nil {
 		t.Fatal("expected an error for an invalid rpo duration, got nil")
 	}
@@ -103,5 +101,27 @@ func TestLoadManagedPlacementParsesButFailsDomainValidation(t *testing.T) {
 	errs := stack.Validate()
 	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "planned, not yet available") {
 		t.Fatalf("expected domain validation to refuse managed placement with a remedy, got %v", errs)
+	}
+}
+
+// TestLoadRPOGuaranteeParsesButFailsClosed mirrors the managed-placement
+// case above for guarantees.rpo (owner decision, week-one plan "Owner
+// decisions — 2026-07-26"): the schema still accepts the field
+// structurally, but domain validation refuses it unconditionally with
+// the remedy in the error (golden rules 34, 35). TestLoadValidDocument
+// above proves the same declaration, minus guarantees.rpo, compiles
+// cleanly (rule 49: the check shown able to fail and pass).
+func TestLoadRPOGuaranteeParsesButFailsClosed(t *testing.T) {
+	doc := strings.Replace(validDoc, "mtls: {}", "mtls: {}\n      rpo: 1h", 1)
+	stack, err := yaml.New().Load([]byte(doc))
+	if err != nil {
+		t.Fatalf("expected the schema to accept guarantees.rpo structurally, got parse error: %v", err)
+	}
+	errs := stack.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "planned, not yet available") {
+		t.Fatalf("expected domain validation to refuse guarantees.rpo with a remedy, got %v", errs)
+	}
+	if !strings.Contains(errs[0].Error(), "remove guarantees.rpo") {
+		t.Fatalf("expected the error to name the concrete remedy, got %v", errs)
 	}
 }

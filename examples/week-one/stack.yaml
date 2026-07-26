@@ -10,6 +10,5 @@ components:
         name: orders-db-app
     guarantees:
       mtls: {}
-      rpo: 1h
     allowedConsumers:
       - serviceAccount: probe-client

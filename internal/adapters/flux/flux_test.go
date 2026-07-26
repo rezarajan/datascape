@@ -14,6 +14,15 @@ import (
 	"github.com/rezarajan/datascape/internal/domain"
 )
 
+// exampleStack mirrors examples/week-one/stack.yaml: the week-one
+// artifact ships exactly one live guarantee triple, mTLS (owner
+// decision, week-one plan "Owner decisions — 2026-07-26"). It carries
+// no guarantees.rpo — that guarantee now fails compilation closed before
+// reaching this emitter at all (internal/domain/guarantees.go) — so it
+// is exercised directly against the emitter below instead
+// (TestEmitWithRPOGuaranteeEmitsBackupObjects,
+// TestEmitUnsatisfiableRPORefused), keeping the gated durability
+// machinery unit-tested without it ever reaching the golden output.
 func exampleStack() domain.Stack {
 	return domain.Stack{
 		Name: "week-one",
@@ -24,7 +33,6 @@ func exampleStack() domain.Stack {
 				Credentials: domain.SecretRef{Name: "orders-db-app"},
 				Guarantees: domain.Guarantees{
 					MTLS: &domain.MTLSGuarantee{},
-					RPO:  &domain.RPOGuarantee{Target: time.Hour},
 				},
 				AllowedConsumers: []domain.AllowedConsumer{
 					{ServiceAccount: "probe-client"},
@@ -190,6 +198,44 @@ func TestEmitWithoutRPOGuaranteeEmitsNoBackupObjects(t *testing.T) {
 	}
 	if bytes.Contains(manifests.Files["apps/week-one/orders-db-cluster.yaml"], []byte("backup")) {
 		t.Error("Cluster CR mentions backup without a declared rpo guarantee")
+	}
+}
+
+// TestEmitWithRPOGuaranteeEmitsBackupObjects exercises the durability
+// guarantee's gated emitted-infra element directly against this emitter
+// (checkRPOSatisfiable, emitDurability): guarantees.rpo now refuses to
+// compile before ever reaching this package on the normal compile path
+// (internal/domain/guarantees.go — owner decision, week-one plan "Owner
+// decisions — 2026-07-26"), so this is the unit coverage keeping that
+// machinery from rotting before a backup destination becomes declarable
+// (week two+ skeleton).
+func TestEmitWithRPOGuaranteeEmitsBackupObjects(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				Guarantees: domain.Guarantees{
+					RPO: &domain.RPOGuarantee{Target: time.Hour},
+				},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	sb, ok := manifests.Files["apps/week-one/orders-db-scheduledbackup.yaml"]
+	if !ok {
+		t.Fatalf("expected a ScheduledBackup to be emitted, got %v", sortedKeys(manifests.Files))
+	}
+	if !bytes.Contains(sb, []byte("@every 1h0m0s")) {
+		t.Errorf("ScheduledBackup schedule does not derive from the declared RPO:\n%s", sb)
+	}
+	if !bytes.Contains(manifests.Files["apps/week-one/orders-db-cluster.yaml"], []byte("backup:")) {
+		t.Error("Cluster CR does not carry spec.backup despite a declared rpo guarantee")
 	}
 }
 

@@ -21,9 +21,16 @@ type Guarantees struct {
 
 	// RPO declares the durability/recovery guarantee: the maximum
 	// acceptable window of data loss, compiled to a backup schedule that
-	// honors it. A target the compiler cannot honor fails compilation
-	// with the remedy in the error (golden rules 34/35) — enforced by
-	// the compiler core, not here.
+	// honors it. v1 has no way to declare a backup destination, so this
+	// guarantee fails compilation closed unconditionally — the same
+	// fail-closed style as placement: managed (golden rules 34/35) —
+	// enforced in Validate below, not the compiler core: the guarantee
+	// can never be satisfied regardless of target, so there is nothing
+	// target-dependent for the compiler core or an emitter to check on
+	// the live path. The emitter-level satisfiability check and backup
+	// emitter remain in the tree, gated behind this refusal, for the
+	// week a destination becomes declarable (owner decision, week-one
+	// plan "Owner decisions — 2026-07-26").
 	RPO *RPOGuarantee
 }
 
@@ -39,13 +46,24 @@ type RPOGuarantee struct {
 }
 
 // Validate reports every structural problem with g, aggregated rather
-// than stopping at the first (golden rule 33).
+// than stopping at the first (golden rule 33). guarantees.rpo refuses
+// unconditionally here, in the same fail-closed style as
+// placement: managed (golden rules 34, 35): v1 has no way to declare a
+// backup destination, so the durability guarantee's conformance probe
+// could never pass, for any declared target. The gated emitter-level
+// machinery (checkRPOSatisfiable, the ScheduledBackup emitter in
+// internal/adapters/flux/durability.go) stays in the tree, unit-tested,
+// for the week a destination becomes declarable — this refusal simply
+// never lets the compile path reach it.
 func (g Guarantees) Validate(component string) []error {
 	var errs []error
-	if g.RPO != nil && g.RPO.Target <= 0 {
+	if g.RPO != nil {
 		errs = append(errs, fmt.Errorf(
-			"postgres component %q: guarantees.rpo must be a positive duration, got %q — declare e.g. \"1h\" or \"15m\"",
-			component, g.RPO.Target))
+			"postgres component %q: guarantees.rpo is planned, not yet available — "+
+				"v1 has no backup destination declarable, so the durability guarantee's "+
+				"conformance probe could never pass; remove guarantees.rpo (a declarable "+
+				"destination is planned for the week-two+ skeleton)",
+			component))
 	}
 	return errs
 }

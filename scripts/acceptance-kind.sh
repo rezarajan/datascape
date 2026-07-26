@@ -62,7 +62,7 @@ log "determinism: two compiles are byte-identical (rules 22, 45)"
 diff -rq "$OUT" /tmp/d7s-out-2
 rm -rf /tmp/d7s-out-2
 
-log "negative probe: unsatisfiable RPO refuses to compile (rules 34, 35, 49)"
+log "negative probe: any declared RPO refuses to compile (rules 34, 35, 49)"
 cat >/tmp/d7s-bad-rpo.yaml <<'EOF'
 apiVersion: d7s.dev/v1alpha1
 kind: Stack
@@ -78,10 +78,10 @@ components:
       rpo: 2m
 EOF
 if /tmp/d7s compile /tmp/d7s-bad-rpo.yaml -o /tmp/d7s-bad-rpo-out 2>/tmp/d7s-bad-rpo.err; then
-	echo "expected compilation to refuse an unsatisfiable RPO" >&2
+	echo "expected compilation to refuse a declared RPO" >&2
 	exit 1
 fi
-grep -q "cannot be honored" /tmp/d7s-bad-rpo.err
+grep -q "durability guarantee's conformance probe could never pass" /tmp/d7s-bad-rpo.err
 rm -f /tmp/d7s-bad-rpo.yaml /tmp/d7s-bad-rpo.err
 rm -rf /tmp/d7s-bad-rpo-out
 
@@ -117,11 +117,10 @@ kubectl create secret generic orders-db-app -n week-one \
 	--from-literal=password="$(openssl rand -hex 16)" \
 	--dry-run=client -o yaml | kubectl apply -f -
 
-log "apply app layer: Cluster CR, zero-trust, durability"
+log "apply app layer: Cluster CR, zero-trust"
 kubectl apply -f "$OUT/apps/week-one/orders-db-cluster.yaml"
 kubectl apply -f "$OUT/apps/week-one/peerauthentication.yaml"
 kubectl apply -f "$OUT/apps/week-one/orders-db-authorizationpolicy.yaml"
-kubectl apply -f "$OUT/apps/week-one/orders-db-scheduledbackup.yaml"
 
 log "wait: Cluster reaches healthy state"
 poll "Cluster healthy" bash -c \
@@ -145,10 +144,5 @@ if kubectl exec -n default offmesh-client -- env PGPASSWORD="$PASSWORD" \
 	echo "expected the off-mesh client to be refused, but it connected" >&2
 	exit 1
 fi
-
-log "durability probe: ScheduledBackup fires, a Backup object appears"
-poll "Backup object appears" bash -c \
-	"[ \"\$(kubectl get backup -n week-one --no-headers 2>/dev/null | wc -l)\" -gt 0 ]"
-kubectl get backup -n week-one
 
 log "acceptance scenario PASSED"
