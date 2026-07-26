@@ -12,7 +12,9 @@
 package flux
 
 import (
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/rezarajan/datascape/internal/domain"
 	"github.com/rezarajan/datascape/internal/ports"
@@ -31,6 +33,17 @@ const (
 	infraKustomizationName = "cnpg-operator"
 	fluxSystemNamespace    = "flux-system"
 	reconcileInterval      = "10m"
+
+	// minSupportedRPO is the smallest RPO this emitter can honor with
+	// scheduled base backups (no continuous WAL-archiving support this
+	// week — a known, deliberate gap, golden rule 7). A smaller declared
+	// RPO fails compilation rather than silently under-delivering
+	// (golden rules 34, 37, 50: no best-effort tier for a guarantee).
+	minSupportedRPO = 5 * time.Minute
+
+	// defaultRetentionPolicy is fixed for v1: retention isn't yet a
+	// declared field (golden rule 7).
+	defaultRetentionPolicy = "30d"
 )
 
 // gitSourceRef is the Flux Source every Kustomization/HelmRelease this
@@ -52,23 +65,57 @@ func New() *Emitter {
 	return &Emitter{}
 }
 
-// Emit implements ports.Emitter.
+// Emit implements ports.Emitter. It checks every component against what
+// this target can actually honor before writing anything (golden
+// rule 33's spirit carried into the emitter): an unsatisfiable RPO on
+// one component must not leave a partial compile behind.
 func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
-	files := map[string][]byte{}
-
+	var pgs []domain.Postgres
+	var errs []error
 	for _, c := range stack.Components {
 		pg, ok := c.(domain.Postgres)
 		if !ok {
-			return ports.Manifests{}, fmt.Errorf(
+			errs = append(errs, fmt.Errorf(
 				"flux emitter: component %q has kind %q, which is planned, not yet available",
-				c.ComponentName(), c.Kind())
+				c.ComponentName(), c.Kind()))
+			continue
 		}
+		if err := checkRPOSatisfiable(pg); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		pgs = append(pgs, pg)
+	}
+	if len(errs) > 0 {
+		return ports.Manifests{}, errors.Join(errs...)
+	}
+
+	files := map[string][]byte{}
+	for _, pg := range pgs {
 		if err := emitPostgres(files, stack.Name, pg); err != nil {
 			return ports.Manifests{}, err
 		}
 	}
-
 	return ports.Manifests{Files: files}, nil
+}
+
+// checkRPOSatisfiable is the durability guarantee's compile-time check
+// (problem definition Amendment 1, "the guarantee primitive"): a
+// declared RPO this emitter cannot honor fails compilation with the
+// remedy in the error, rather than compiling a schedule that quietly
+// can't meet it.
+func checkRPOSatisfiable(pg domain.Postgres) error {
+	if pg.Guarantees.RPO == nil {
+		return nil
+	}
+	if pg.Guarantees.RPO.Target < minSupportedRPO {
+		return fmt.Errorf(
+			"flux emitter: postgres component %q: guarantees.rpo of %s cannot be honored — "+
+				"the minimum RPO this emitter supports is %s (scheduled base backups only; "+
+				"continuous WAL archiving is planned, not yet available); declare a larger value",
+			pg.Name, pg.Guarantees.RPO.Target, minSupportedRPO)
+	}
+	return nil
 }
 
 func emitPostgres(files map[string][]byte, stackName string, pg domain.Postgres) error {
@@ -79,6 +126,9 @@ func emitPostgres(files map[string][]byte, stackName string, pg domain.Postgres)
 		return err
 	}
 	if err := emitZeroTrust(files, stackName, pg); err != nil {
+		return err
+	}
+	if err := emitDurability(files, stackName, pg); err != nil {
 		return err
 	}
 	return emitAppKustomization(files, stackName)
@@ -269,7 +319,34 @@ func emitCluster(files map[string][]byte, stackName string, pg domain.Postgres) 
 			Storage: CNPGStorage{Size: "1Gi"},
 		},
 	}
+	if pg.Guarantees.RPO != nil {
+		cluster.Spec.Backup = &CNPGBackup{RetentionPolicy: defaultRetentionPolicy}
+	}
 	return set(files, fmt.Sprintf("apps/%s/%s-cluster.yaml", stackName, pg.Name), cluster)
+}
+
+// emitDurability compiles the durability guarantee triple's emitted-infra
+// element: a ScheduledBackup whose cadence is derived directly from the
+// declared RPO. Emits nothing if the RPO guarantee isn't declared.
+func emitDurability(files map[string][]byte, stackName string, pg domain.Postgres) error {
+	if pg.Guarantees.RPO == nil {
+		return nil
+	}
+	sb := ScheduledBackup{
+		APIVersion: "postgresql.cnpg.io/v1",
+		Kind:       "ScheduledBackup",
+		Metadata: ObjectMeta{
+			Name:      pg.Name,
+			Namespace: stackName,
+			Labels:    ownershipLabels(stackName, pg.Name),
+		},
+		Spec: ScheduledBackupSpec{
+			Schedule:  "@every " + pg.Guarantees.RPO.Target.String(),
+			Cluster:   ScheduledBackupRef{Name: pg.Name},
+			Immediate: true,
+		},
+	}
+	return set(files, fmt.Sprintf("apps/%s/%s-scheduledbackup.yaml", stackName, pg.Name), sb)
 }
 
 func emitAppKustomization(files map[string][]byte, stackName string) error {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +109,68 @@ func TestEmitWithoutMTLSGuaranteeEmitsNoZeroTrustObjects(t *testing.T) {
 		if filepath.Base(path) == "peerauthentication.yaml" || filepath.Base(path) == "orders-db-authorizationpolicy.yaml" {
 			t.Errorf("emitted %s without a declared mtls guarantee", path)
 		}
+	}
+}
+
+// TestEmitWithoutRPOGuaranteeEmitsNoBackupObjects mirrors the mTLS case
+// for durability: no ScheduledBackup and no Cluster.spec.backup unless
+// the RPO guarantee is declared.
+func TestEmitWithoutRPOGuaranteeEmitsNoBackupObjects(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for path := range manifests.Files {
+		if filepath.Base(path) == "orders-db-scheduledbackup.yaml" {
+			t.Errorf("emitted %s without a declared rpo guarantee", path)
+		}
+	}
+	if bytes.Contains(manifests.Files["apps/week-one/orders-db-cluster.yaml"], []byte("backup")) {
+		t.Error("Cluster CR mentions backup without a declared rpo guarantee")
+	}
+}
+
+// TestEmitUnsatisfiableRPORefused proves the durability guarantee's
+// compile-time check can fail (golden rule 49's "proven by the negative
+// probe" spirit, exercised here at compile time): an RPO below what the
+// emitter can honor refuses compilation with the remedy in the error
+// (golden rules 34, 35), and nothing is written for that call.
+func TestEmitUnsatisfiableRPORefused(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				Guarantees: domain.Guarantees{
+					RPO: &domain.RPOGuarantee{Target: 2 * time.Minute},
+				},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err == nil {
+		t.Fatal("expected an error for an unsatisfiable RPO, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot be honored") {
+		t.Errorf("error %q does not explain why the RPO can't be honored", err.Error())
+	}
+	if !strings.Contains(err.Error(), "declare a larger value") {
+		t.Errorf("error %q does not carry a remedy (golden rule 35)", err.Error())
+	}
+	if len(manifests.Files) != 0 {
+		t.Errorf("expected no files written on refusal, got %v", sortedKeys(manifests.Files))
 	}
 }
 

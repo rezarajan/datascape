@@ -104,6 +104,7 @@ type CNPGClusterSpec struct {
 	Instances int           `yaml:"instances"`
 	Bootstrap CNPGBootstrap `yaml:"bootstrap"`
 	Storage   CNPGStorage   `yaml:"storage"`
+	Backup    *CNPGBackup   `yaml:"backup,omitempty"`
 }
 
 // CNPGBootstrap is Cluster.spec.bootstrap.

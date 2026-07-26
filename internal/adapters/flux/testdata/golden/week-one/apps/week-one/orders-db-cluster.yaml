@@ -17,3 +17,5 @@ spec:
         name: orders-db-app
   storage:
     size: 1Gi
+  backup:
+    retentionPolicy: 30d
