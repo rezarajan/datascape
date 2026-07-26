@@ -1,0 +1,30 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: api-db
+  namespace: internal-api
+  labels:
+    d7s.dev/component: api-db
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: internal-api
+spec:
+  selector:
+    matchLabels:
+      cnpg.io/cluster: api-db
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/internal-api/sa/api-server
+      to:
+        - operation:
+            ports:
+              - "5432"
+    - from:
+        - source:
+            namespaces:
+              - cnpg-system
+      to:
+        - operation:
+            ports:
+              - "8000"

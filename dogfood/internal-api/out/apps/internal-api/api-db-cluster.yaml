@@ -1,0 +1,19 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: api-db
+  namespace: internal-api
+  labels:
+    d7s.dev/component: api-db
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: internal-api
+spec:
+  instances: 1
+  bootstrap:
+    initdb:
+      database: api-db
+      owner: api-db
+      secret:
+        name: api-db-app
+  storage:
+    size: 1Gi

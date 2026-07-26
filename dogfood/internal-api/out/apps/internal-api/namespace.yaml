@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: internal-api
+  labels:
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: internal-api
+    istio.io/dataplane-mode: ambient

@@ -1,0 +1,14 @@
+apiVersion: d7s.dev/v1alpha1
+kind: Stack
+name: internal-api
+components:
+  - kind: postgres
+    name: api-db
+    placement: self-hosted
+    credentials:
+      secretRef:
+        name: api-db-app
+    guarantees:
+      mtls: {}
+    allowedConsumers:
+      - serviceAccount: api-server

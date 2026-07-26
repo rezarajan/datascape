@@ -1,0 +1,11 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: internal-api
+  labels:
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: internal-api
+spec:
+  mtls:
+    mode: STRICT

@@ -1,0 +1,10 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: cloudnative-pg
+  namespace: cnpg-system
+  labels:
+    d7s.dev/managed-by: d7s
+spec:
+  interval: 10m
+  url: https://cloudnative-pg.github.io/charts
