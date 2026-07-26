@@ -251,3 +251,14 @@ probe, and the off-mesh refusal all passed live; the run ended
 `acceptance scenario PASSED` with clean, ephemeral teardown. The emitter needed no
 changes — its `GitRepository`/Kustomization naming and `path` convention already
 assumed exactly this shape.
+
+**Additive line, 2026-07-26 (contract-review follow-up, same slice):** the emitted
+Kustomizations carry no `spec.healthChecks`, so Flux's `dependsOn` alone does not gate
+the app-layer Kustomization on the CNPG operator's *actual* readiness (only on the
+infra-layer Kustomization's own apply having succeeded) — a real gap between what
+`dependsOn` models and what the app layer needs. The harness compensates
+procedurally, not by changing the compiled output: it explicitly waits for the CNPG
+operator's HelmRelease and Deployment before forcing the app-layer Kustomization's
+reconcile on demand. Closing this at the emitter (adding `spec.healthChecks` to the
+compiled Kustomization) is a named future-slice candidate, not done here — scope for
+this slice was the harness delivery path, not the compiled Kustomization shape.

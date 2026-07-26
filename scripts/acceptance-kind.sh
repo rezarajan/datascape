@@ -290,9 +290,13 @@ assert_flux_managed() {
 		;;
 	esac
 }
+assert_flux_managed namespace cnpg-system ""
+assert_flux_managed helmrepositories.source.toolkit.fluxcd.io cloudnative-pg cnpg-system
+assert_flux_managed helmreleases.helm.toolkit.fluxcd.io cnpg-operator cnpg-system
 assert_flux_managed namespace week-one ""
 assert_flux_managed clusters.postgresql.cnpg.io orders-db week-one
-assert_flux_managed helmreleases.helm.toolkit.fluxcd.io cnpg-operator cnpg-system
+assert_flux_managed peerauthentications.security.istio.io default week-one
+assert_flux_managed authorizationpolicies.security.istio.io orders-db week-one
 
 PASSWORD=$(kubectl get secret orders-db-app -n week-one -o jsonpath='{.data.password}' | base64 -d)
 
