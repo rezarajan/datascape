@@ -150,6 +150,22 @@ match; commits `4b2a72c` and `a2afe97`.
 passphrase cache expired) — held rather than bypassing with `--no-gpg-sign`; the
 owner unlocked their agent out of band and signing resumed normally.
 
+## Finding + fix: harness toolchain was unpinned; now provided by flake.nix (2026-07-26)
+
+Caught during the first steward review pass: re-running `scripts/acceptance-kind.sh`
+failed at `istioctl: command not found` — the binary used for the green 2026-07-26 run
+was no longer on PATH — and the CI acceptance job never installed the `flux` CLI at
+all (absent from `ubuntu-latest`), so it could not have passed as written; `istioctl`
+there came unpinned from `curl | sh`. Owner directive: define every required test
+binary in a `flake.nix` for consistency across environments. Done — dev shell pins
+go/kind/kubectl/fluxcd/istioctl/openssl; CI's acceptance job now enters through
+`nix develop`; the fast tier stays on `setup-go` (go.mod already pins its only tool,
+and nix install overhead would eat the 5-minute budget that guards golden rule 43).
+The full harness was then re-run through the flake: **all seven checks pass**
+(compile, determinism, unsatisfiable-RPO refusal, cluster healthy, positive mTLS
+probe, off-mesh refusal, durability probe firing) with clean teardown. CI-side run
+still unverified until the owner pushes.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: team name + developer-customer count — record (privately if repo goes

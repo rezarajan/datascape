@@ -2,7 +2,9 @@
 # Acceptance harness (docs/plans/01-week-one.md): the documented
 # scenario, exercised exactly as an operator would type it, against a
 # real kind cluster with Flux + Istio ambient + CloudNativePG. Same
-# script locally and in CI (TASK_PROGRESS.md, 2026-07-26 re-plan).
+# script locally and in CI (TASK_PROGRESS.md, 2026-07-26 re-plan); both
+# run it through the pinned toolchain in flake.nix:
+#   nix develop --command scripts/acceptance-kind.sh
 #
 # Environment prerequisites this week (not compiled by d7s — week-one
 # plan, "explicitly NOT this week"):

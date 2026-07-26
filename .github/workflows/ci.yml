@@ -24,15 +24,10 @@ jobs:
     # Deep tier (golden rule 43): explicit, impact-selected, not what a
     # developer waits on locally. Native Docker on ubuntu-latest — no
     # nested virtualization, same substrate kind/CNPG/Flux test on.
-    timeout-minutes: 15
+    # Toolchain comes from flake.nix so CI and local runs exercise the
+    # same pinned binaries; only the Docker daemon is the runner's own.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: helm/kind-action@v1
-        with:
-          install_only: true
-      - run: curl -sL https://istio.io/downloadIstioctl | sh -
-      - run: echo "$HOME/.istioctl/bin" >> "$GITHUB_PATH"
-      - run: ./scripts/acceptance-kind.sh
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - run: nix develop --command ./scripts/acceptance-kind.sh
