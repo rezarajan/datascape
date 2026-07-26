@@ -74,23 +74,36 @@ component kind or second GitOps target; restore operation (day-2, refused).
 
 ## Exit criteria (verified by running — rule 58)
 
-- [ ] A stack declaring `rpo` + an external store compiles deterministically;
+- [x] A stack declaring `rpo` + an external store compiles deterministically;
       golden files pin the wired `barmanObjectStore`, ScheduledBackup, and the
       CONDITIONAL label; `rpo` without a destination still refuses with the
-      new remedy (fail-then-pass tested).
-- [ ] Live on kind: a real backup reaches completed phase against the
+      new remedy (fail-then-pass tested). **Verified 2026-07-26** (`caf04c5` +
+      `921db90`; contract review clean; the rule-9 watch item closed en route).
+- [x] Live on kind: a real backup reaches completed phase against the
       harness-provided external MinIO; the probe that has failed since week one
-      passes; teardown leaves nothing.
-- [ ] Emitted `healthChecks` proven live: the harness's procedural operator-wait
+      passes; teardown leaves nothing. **Verified 2026-07-26** (`1515e21`) — the
+      full scenario composed both guarantee families on one component; zero
+      contract-review findings.
+- [x] Emitted `healthChecks` proven live: the harness's procedural operator-wait
       compensation is deleted and the scenario still passes on compiled ordering
-      alone.
-- [ ] `nix develop` provides a built `d7s`; QUICKSTART's commands run verbatim in
-      CI/harness.
+      alone. **Verified 2026-07-26** (`d5843bc`) — healthCheck targets the
+      operator's HelmRelease Ready condition; full live pass with the
+      compensation gone.
+- [x] `nix develop` provides a built `d7s`; QUICKSTART's commands run verbatim in
+      CI/harness. **Verified 2026-07-26** (`97c026d`, `cc025d9`) — flake `d7s`
+      package in the dev shell; a CI quickstart job exercises the built binary;
+      every documented command actually run.
 - [ ] **Dogfood note 3: a human teammate (not the owner, not an agent) runs the
       QUICKSTART cold and their outcome — success or friction — is recorded
       verbatim.** The kill review reads this as the first non-agent evidence.
-- [ ] Managed actions run against a differently-named component (the note-2
-      hardcoding finding closed, demonstrated).
+      **The only open criterion — waits on the owner's chosen developer.**
+- [x] Managed actions run against a differently-named component (the note-2
+      hardcoding finding closed, demonstrated). **Verified 2026-07-26**
+      (`2c7d8ae`, fixes `d1ef150`) — component `widgets-db` ran the full managed
+      scenario live against real Neon with clean destroy and leak-check; a
+      live-caught concurrency bug (shared gitserver image tag between parallel
+      harness runs) was root-caused and fixed with per-run tags; the
+      tf-runner-warm PodSecurity warning is gone.
 
 ## Open questions for the owner (at approval)
 

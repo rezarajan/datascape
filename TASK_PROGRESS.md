@@ -395,6 +395,21 @@ picks the developer. Kill review 2026-08-23.
   vs harness MinIO; guarantee composition mtls+rpo on one component)
   dispatched.
 
+## WEEK THREE BUILD COMPLETE — one exit criterion open (2026-07-26)
+
+All six slices landed and accepted: quick-start (`97c026d`+`cc025d9`), external +
+durability CONDITIONAL (`caf04c5`+`921db90` — completed by a second implementer
+after the owner stopped the first mid-slice; partial work verified sound and
+kept), live backup-completed probe (`1515e21`, zero review findings — the leg
+failing by design since week one is green; both guarantee families composed on
+one component), compiled healthChecks with harness compensation deleted
+(`d5843bc`), operator-grade managed actions demonstrated live via `widgets-db`
+(`2c7d8ae`+`d1ef150` — also live-caught and fixed a parallel-run image-tag
+collision, and cleared the PodSecurity warning). Fast tier + flake check green on
+merged HEAD; README refreshed (`0f8e140`, `90eb88f`). Five of six exit criteria
+checked off, verified by running. **Open: dogfood note 3 — the teammate's cold
+QUICKSTART run (owner picks the developer).** Kill review 2026-08-23.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
