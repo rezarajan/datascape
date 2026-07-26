@@ -275,6 +275,24 @@ that base (managed/Neon acceptance with `NEON_API_KEY` entering only via
 environment/gitignored local file → runtime Secret; CI runs the managed tier only
 where the secret exists, reporting SKIPPED/unknown otherwise, never coverage).
 
+## Week-two slice 4 (Flux-path harness) — landed, fix round in progress (2026-07-26)
+
+Commit `3d948b2`: the harness now stands up a harness-lifetime in-cluster git
+server (debian-slim + nginx + fcgiwrap, smart HTTP — Flux's GitRepository schema
+accepts only http/https/ssh, and Alpine ships no git-http-backend), pushes compiled
+`out/` to it, applies ONLY the GitRepository + the two emitted Kustomization CRs,
+and lets kustomize/helm-controller deliver everything else; a managedFields guard
+fails loudly on hand-applied compiled objects. Full live pass verified from the run
+log; no emitter changes were needed (the emitted sourceRef/path shape already
+matched). Claims un-narrowed additively in the week-one plan + README, citing the
+run. **Implementer-flagged emitter gap:** emitted Kustomizations carry no
+`spec.healthChecks`, so `dependsOn` alone doesn't gate on CNPG operator readiness —
+harness compensates with an explicit wait + Flux's on-demand reconcile verb;
+emitter-side fix is a named future-slice candidate. **Review findings (returned for
+one fix commit + mandatory live re-run):** (1) the guard claimed all compiled
+objects but covered 3 of 7 — the zero-trust pair among the unguarded; (2) the
+healthChecks gap was script-comment-only while the plan note claimed flat closure.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
