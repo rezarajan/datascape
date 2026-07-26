@@ -1,7 +1,12 @@
 # Week-four plan — the mesh is the substrate: compiled egress, honest quickstart
 
-**Class: Plan.** **Status: DRAFT (Revision 0), 2026-07-26 — awaiting owner approval.
-No product code lands from this plan until approved (phase gate).**
+**Class: Plan.** **Status: APPROVED as Revision 1 — 2026-07-26, by the owner.
+Approval-round answers, verbatim: "Approve as drafted (Recommended)"; deny
+breadth "Declared endpoints first (Recommended)" — the namespace-wide deny-all
+posture lands as the deliberate next step, exemptions modeled first; manual route
+"Companion WALKTHROUGH.md (Recommended)". Product code authorized, scoped to this
+revision. Build order: slices 1+2 (compiler, one implementer), then 3 (harness),
+then 4 (docs — WALKTHROUGH.md is a new root-level doc, unclassified like README).**
 
 ## Ground: two owner directives, recorded verbatim (2026-07-26)
 
