@@ -293,6 +293,11 @@ one fix commit + mandatory live re-run):** (1) the guard claimed all compiled
 objects but covered 3 of 7 — the zero-trust pair among the unguarded; (2) the
 healthChecks gap was script-comment-only while the plan note claimed flat closure.
 
+**Slice 4 ACCEPTED (2026-07-26):** fix commit `02246be` — guard extended to all
+seven compiled objects (both zero-trust objects included), healthChecks gap
+disclosed with a dated line in the week-one plan; full harness re-run PASSED with
+the extended guard (verified from the run log), fast tier green.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
