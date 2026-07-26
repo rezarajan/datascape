@@ -1,0 +1,131 @@
+package flux
+
+// ObjectMeta is the subset of Kubernetes object metadata d7s emits.
+// Labels uses a plain map: gopkg.in/yaml.v3 marshals map[string]string
+// keys in sorted order, which is what keeps compiled output
+// byte-identical across runs (golden rules 22, 45).
+type ObjectMeta struct {
+	Name      string            `yaml:"name"`
+	Namespace string            `yaml:"namespace,omitempty"`
+	Labels    map[string]string `yaml:"labels"`
+}
+
+// Namespace is a Kubernetes Namespace.
+type Namespace struct {
+	APIVersion string     `yaml:"apiVersion"`
+	Kind       string     `yaml:"kind"`
+	Metadata   ObjectMeta `yaml:"metadata"`
+}
+
+// SourceRef points a Flux object at the Source it reads from.
+type SourceRef struct {
+	APIVersion string `yaml:"apiVersion,omitempty"`
+	Kind       string `yaml:"kind"`
+	Name       string `yaml:"name"`
+	Namespace  string `yaml:"namespace,omitempty"`
+}
+
+// HelmRepository is a Flux source.toolkit.fluxcd.io HelmRepository.
+type HelmRepository struct {
+	APIVersion string             `yaml:"apiVersion"`
+	Kind       string             `yaml:"kind"`
+	Metadata   ObjectMeta         `yaml:"metadata"`
+	Spec       HelmRepositorySpec `yaml:"spec"`
+}
+
+// HelmRepositorySpec is the subset of HelmRepository.spec d7s emits.
+type HelmRepositorySpec struct {
+	Interval string `yaml:"interval"`
+	URL      string `yaml:"url"`
+}
+
+// HelmRelease is a Flux helm.toolkit.fluxcd.io HelmRelease.
+type HelmRelease struct {
+	APIVersion string          `yaml:"apiVersion"`
+	Kind       string          `yaml:"kind"`
+	Metadata   ObjectMeta      `yaml:"metadata"`
+	Spec       HelmReleaseSpec `yaml:"spec"`
+}
+
+// HelmReleaseSpec is the subset of HelmRelease.spec d7s emits.
+type HelmReleaseSpec struct {
+	Interval        string    `yaml:"interval"`
+	TargetNamespace string    `yaml:"targetNamespace"`
+	Chart           HelmChart `yaml:"chart"`
+}
+
+// HelmChart is HelmReleaseSpec.chart.
+type HelmChart struct {
+	Spec HelmChartSpec `yaml:"spec"`
+}
+
+// HelmChartSpec is HelmReleaseSpec.chart.spec.
+type HelmChartSpec struct {
+	Chart     string    `yaml:"chart"`
+	Version   string    `yaml:"version"`
+	SourceRef SourceRef `yaml:"sourceRef"`
+}
+
+// DependsOn is one entry of a Kustomization's spec.dependsOn.
+type DependsOn struct {
+	Name      string `yaml:"name"`
+	Namespace string `yaml:"namespace,omitempty"`
+}
+
+// Kustomization is a Flux kustomize.toolkit.fluxcd.io Kustomization: the
+// control object that tells Flux to reconcile a path. It is not the
+// plain kustomize.config.k8s.io Kustomization file.
+type Kustomization struct {
+	APIVersion string            `yaml:"apiVersion"`
+	Kind       string            `yaml:"kind"`
+	Metadata   ObjectMeta        `yaml:"metadata"`
+	Spec       KustomizationSpec `yaml:"spec"`
+}
+
+// KustomizationSpec is the subset of Kustomization.spec d7s emits.
+type KustomizationSpec struct {
+	Interval  string      `yaml:"interval"`
+	Path      string      `yaml:"path"`
+	Prune     bool        `yaml:"prune"`
+	SourceRef SourceRef   `yaml:"sourceRef"`
+	DependsOn []DependsOn `yaml:"dependsOn,omitempty"`
+}
+
+// CNPGCluster is a CloudNativePG postgresql.cnpg.io Cluster.
+type CNPGCluster struct {
+	APIVersion string          `yaml:"apiVersion"`
+	Kind       string          `yaml:"kind"`
+	Metadata   ObjectMeta      `yaml:"metadata"`
+	Spec       CNPGClusterSpec `yaml:"spec"`
+}
+
+// CNPGClusterSpec is the subset of Cluster.spec d7s emits.
+type CNPGClusterSpec struct {
+	Instances int           `yaml:"instances"`
+	Bootstrap CNPGBootstrap `yaml:"bootstrap"`
+	Storage   CNPGStorage   `yaml:"storage"`
+}
+
+// CNPGBootstrap is Cluster.spec.bootstrap.
+type CNPGBootstrap struct {
+	InitDB CNPGInitDB `yaml:"initdb"`
+}
+
+// CNPGInitDB is Cluster.spec.bootstrap.initdb. Secret references a
+// pre-existing Kubernetes Secret by name only — d7s never sees or
+// provisions the credential value (golden rule 51).
+type CNPGInitDB struct {
+	Database string        `yaml:"database"`
+	Owner    string        `yaml:"owner"`
+	Secret   CNPGSecretRef `yaml:"secret"`
+}
+
+// CNPGSecretRef names a Secret.
+type CNPGSecretRef struct {
+	Name string `yaml:"name"`
+}
+
+// CNPGStorage is Cluster.spec.storage.
+type CNPGStorage struct {
+	Size string `yaml:"size"`
+}

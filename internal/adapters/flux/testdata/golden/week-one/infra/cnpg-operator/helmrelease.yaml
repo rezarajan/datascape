@@ -1,0 +1,18 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cnpg-operator
+  namespace: cnpg-system
+  labels:
+    d7s.dev/managed-by: d7s
+spec:
+  interval: 10m
+  targetNamespace: cnpg-system
+  chart:
+    spec:
+      chart: cloudnative-pg
+      version: 0.22.1
+      sourceRef:
+        kind: HelmRepository
+        name: cloudnative-pg
+        namespace: cnpg-system

@@ -1,0 +1,13 @@
+apiVersion: d7s.dev/v1alpha1
+kind: Stack
+name: week-one
+components:
+  - kind: postgres
+    name: orders-db
+    placement: self-hosted
+    credentials:
+      secretRef:
+        name: orders-db-app
+    guarantees:
+      mtls: {}
+      rpo: 1h

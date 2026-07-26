@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: week-one
+  labels:
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: week-one
