@@ -1,13 +1,18 @@
 package flux
 
 // ObjectMeta is the subset of Kubernetes object metadata d7s emits.
-// Labels uses a plain map: gopkg.in/yaml.v3 marshals map[string]string
-// keys in sorted order, which is what keeps compiled output
-// byte-identical across runs (golden rules 22, 45).
+// Labels/Annotations use plain maps: gopkg.in/yaml.v3 marshals
+// map[string]string keys in sorted order, which is what keeps compiled
+// output byte-identical across runs (golden rules 22, 45). Annotations
+// is nil (and so omitted, never an empty mapping) for every object that
+// carries no conditional-guarantee label — only a component whose
+// durability guarantee compiles labeled CONDITIONAL sets it (golden
+// rule 49: the label must be testable-absent).
 type ObjectMeta struct {
-	Name      string            `yaml:"name"`
-	Namespace string            `yaml:"namespace,omitempty"`
-	Labels    map[string]string `yaml:"labels"`
+	Name        string            `yaml:"name"`
+	Namespace   string            `yaml:"namespace,omitempty"`
+	Labels      map[string]string `yaml:"labels"`
+	Annotations map[string]string `yaml:"annotations,omitempty"`
 }
 
 // Namespace is a Kubernetes Namespace.

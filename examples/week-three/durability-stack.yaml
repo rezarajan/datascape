@@ -1,0 +1,22 @@
+apiVersion: d7s.dev/v1alpha1
+kind: Stack
+name: week-three
+external:
+  - name: backups
+    objectStore:
+      endpoint: https://minio.d7s-harness.svc:9000
+      bucket: d7s-backups
+      credentials:
+        secretRef:
+          name: backups-credentials
+components:
+  - kind: postgres
+    name: orders-db
+    placement: self-hosted
+    credentials:
+      secretRef:
+        name: orders-db-app
+    guarantees:
+      rpo:
+        target: 1h
+        backupTo: backups

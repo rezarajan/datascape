@@ -120,6 +120,11 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 		}
 	}
 
+	externalsByName := make(map[string]domain.External, len(stack.Externals))
+	for _, ext := range stack.Externals {
+		externalsByName[ext.Name] = ext
+	}
+
 	files := map[string][]byte{}
 	if len(selfHosted) > 0 {
 		if err := emitCNPGOperator(files, meshEnabled); err != nil {
@@ -136,10 +141,13 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 			return ports.Manifests{}, err
 		}
 	}
+	var conditionals []ports.ConditionalGuarantee
 	for _, pg := range selfHosted {
-		if err := emitSelfHostedPostgres(files, stack.Name, pg); err != nil {
+		cs, err := emitSelfHostedPostgres(files, stack.Name, pg, externalsByName)
+		if err != nil {
 			return ports.Manifests{}, err
 		}
+		conditionals = append(conditionals, cs...)
 	}
 	for _, pg := range managed {
 		if err := emitManagedPostgres(files, stack.Name, pg); err != nil {
@@ -151,7 +159,7 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 			return ports.Manifests{}, err
 		}
 	}
-	return ports.Manifests{Files: files}, nil
+	return ports.Manifests{Files: files, Conditionals: conditionals}, nil
 }
 
 // emitAppNamespace emits the stack's application namespace once.
@@ -200,14 +208,47 @@ func checkRPOSatisfiable(pg domain.Postgres) error {
 // emitted-infra elements. Named explicitly (rather than plain
 // "emitPostgres") since placement: managed now compiles through a
 // different function, emitManagedPostgres (week-two plan, slices 2+3).
-func emitSelfHostedPostgres(files map[string][]byte, stackName string, pg domain.Postgres) error {
-	if err := emitCluster(files, stackName, pg); err != nil {
-		return err
+//
+// externals resolves pg's declared backup destination (week-three plan,
+// slices 1+2): if guarantees.rpo is declared, its backupTo name must
+// resolve here. On the live compile path (compiler.Compile) Stack.
+// Validate has already refused an unresolvable reference before Emit is
+// ever called; the error below is a defensive path only, for a caller
+// (e.g. a unit test) that exercises this emitter directly against a
+// hand-built Stack. The returned []ports.ConditionalGuarantee carries the
+// CLI-visible notice for a durability guarantee that compiled labeled
+// CONDITIONAL (Amendment 2, B3) — empty when pg declares no RPO.
+func emitSelfHostedPostgres(files map[string][]byte, stackName string, pg domain.Postgres, externals map[string]domain.External) ([]ports.ConditionalGuarantee, error) {
+	var ext *domain.External
+	if pg.Guarantees.RPO != nil {
+		resolved, ok := externals[pg.Guarantees.RPO.BackupTo]
+		if !ok {
+			return nil, fmt.Errorf(
+				"flux emitter: postgres component %q: guarantees.rpo.backupTo %q does not resolve to a declared external — this is a defect (domain validation should have caught it)",
+				pg.Name, pg.Guarantees.RPO.BackupTo)
+		}
+		ext = &resolved
+	}
+
+	if err := emitCluster(files, stackName, pg, ext); err != nil {
+		return nil, err
 	}
 	if err := emitZeroTrust(files, stackName, pg); err != nil {
-		return err
+		return nil, err
 	}
-	return emitDurability(files, stackName, pg)
+	if err := emitDurability(files, stackName, pg, ext); err != nil {
+		return nil, err
+	}
+
+	if ext == nil {
+		return nil, nil
+	}
+	return []ports.ConditionalGuarantee{{
+		Component: pg.Name,
+		Guarantee: "durability (guarantees.rpo)",
+		Label:     durabilityConditionalAnnotationKey + ": " + durabilityConditionalAnnotationValue,
+		Reason:    fmt.Sprintf("crosses the trust boundary to external store %q", ext.Name),
+	}}, nil
 }
 
 // emitZeroTrust compiles the transport-security guarantee triple's
@@ -391,7 +432,7 @@ func emitCNPGOperator(files map[string][]byte, meshEnabled bool) error {
 	return set(files, "flux/infra-cnpg-operator.yaml", infra)
 }
 
-func emitCluster(files map[string][]byte, stackName string, pg domain.Postgres) error {
+func emitCluster(files map[string][]byte, stackName string, pg domain.Postgres, ext *domain.External) error {
 	cluster := CNPGCluster{
 		APIVersion: "postgresql.cnpg.io/v1",
 		Kind:       "Cluster",
@@ -413,15 +454,29 @@ func emitCluster(files map[string][]byte, stackName string, pg domain.Postgres) 
 		},
 	}
 	if pg.Guarantees.RPO != nil {
-		cluster.Spec.Backup = &CNPGBackup{RetentionPolicy: defaultRetentionPolicy}
+		backup := &CNPGBackup{RetentionPolicy: defaultRetentionPolicy}
+		bos, err := barmanObjectStore(*ext)
+		if err != nil {
+			return err
+		}
+		backup.BarmanObjectStore = bos
+		cluster.Spec.Backup = backup
+		// The durability guarantee crosses the trust boundary to a
+		// declared external, so it compiles labeled CONDITIONAL, never
+		// silently (problem definition Amendment 2, B3) — visible here
+		// on the Cluster itself, and again on the ScheduledBackup below.
+		cluster.Metadata.Annotations = conditionalDurabilityAnnotation()
 	}
 	return set(files, fmt.Sprintf("apps/%s/%s-cluster.yaml", stackName, pg.Name), cluster)
 }
 
 // emitDurability compiles the durability guarantee triple's emitted-infra
 // element: a ScheduledBackup whose cadence is derived directly from the
-// declared RPO. Emits nothing if the RPO guarantee isn't declared.
-func emitDurability(files map[string][]byte, stackName string, pg domain.Postgres) error {
+// declared RPO. Emits nothing if the RPO guarantee isn't declared. Its
+// resolved backup destination is used only for the CONDITIONAL
+// annotation here — the barmanObjectStore wiring itself lives on the
+// Cluster (emitCluster), since CNPG reads the destination from there.
+func emitDurability(files map[string][]byte, stackName string, pg domain.Postgres, ext *domain.External) error {
 	if pg.Guarantees.RPO == nil {
 		return nil
 	}
@@ -429,9 +484,10 @@ func emitDurability(files map[string][]byte, stackName string, pg domain.Postgre
 		APIVersion: "postgresql.cnpg.io/v1",
 		Kind:       "ScheduledBackup",
 		Metadata: ObjectMeta{
-			Name:      pg.Name,
-			Namespace: stackName,
-			Labels:    ownershipLabels(stackName, pg.Name),
+			Name:        pg.Name,
+			Namespace:   stackName,
+			Labels:      ownershipLabels(stackName, pg.Name),
+			Annotations: conditionalDurabilityAnnotation(),
 		},
 		Spec: ScheduledBackupSpec{
 			Schedule:  "@every " + pg.Guarantees.RPO.Target.String(),

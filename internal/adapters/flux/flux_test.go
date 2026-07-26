@@ -173,9 +173,24 @@ func TestEmitAuthorizationPolicyScopesRulesByPort(t *testing.T) {
 	}
 }
 
+// backupsExternal is the declared external object store durabilityExampleStack
+// and the direct-emitter RPO tests below wire guarantees.rpo.backupTo to.
+func backupsExternal() domain.External {
+	return domain.External{
+		Name: "backups",
+		ObjectStore: &domain.ObjectStoreExternal{
+			Endpoint:    "https://minio.d7s-harness.svc:9000",
+			Bucket:      "d7s-backups",
+			Credentials: domain.SecretRef{Name: "backups-credentials"},
+		},
+	}
+}
+
 // TestEmitWithoutRPOGuaranteeEmitsNoBackupObjects mirrors the mTLS case
 // for durability: no ScheduledBackup and no Cluster.spec.backup unless
-// the RPO guarantee is declared.
+// the RPO guarantee is declared — and, since presence is the only signal
+// (golden rule 50), no CONDITIONAL annotation either (golden rule 49:
+// the label must be testable-absent).
 func TestEmitWithoutRPOGuaranteeEmitsNoBackupObjects(t *testing.T) {
 	stack := domain.Stack{
 		Name: "week-one",
@@ -199,16 +214,20 @@ func TestEmitWithoutRPOGuaranteeEmitsNoBackupObjects(t *testing.T) {
 	if bytes.Contains(manifests.Files["apps/week-one/orders-db-cluster.yaml"], []byte("backup")) {
 		t.Error("Cluster CR mentions backup without a declared rpo guarantee")
 	}
+	if bytes.Contains(manifests.Files["apps/week-one/orders-db-cluster.yaml"], []byte("d7s.dev/guarantee-durability")) {
+		t.Error("Cluster CR carries the CONDITIONAL durability label without a declared rpo guarantee")
+	}
+	if len(manifests.Conditionals) != 0 {
+		t.Errorf("expected no conditional-guarantee notices, got %+v", manifests.Conditionals)
+	}
 }
 
 // TestEmitWithRPOGuaranteeEmitsBackupObjects exercises the durability
-// guarantee's gated emitted-infra element directly against this emitter
-// (checkRPOSatisfiable, emitDurability): guarantees.rpo now refuses to
-// compile before ever reaching this package on the normal compile path
-// (internal/domain/guarantees.go — owner decision, week-one plan "Owner
-// decisions — 2026-07-26"), so this is the unit coverage keeping that
-// machinery from rotting before a backup destination becomes declarable
-// (week two+ skeleton).
+// guarantee's emitted-infra element directly against this emitter
+// (emitCluster, emitDurability): guarantees.rpo now compiles once wired
+// to a declared external (week-three plan, slices 1+2), and every object
+// it emits carries the CONDITIONAL annotation (Amendment 2, B3) since the
+// guarantee crosses the trust boundary to that external.
 func TestEmitWithRPOGuaranteeEmitsBackupObjects(t *testing.T) {
 	stack := domain.Stack{
 		Name: "week-one",
@@ -218,10 +237,11 @@ func TestEmitWithRPOGuaranteeEmitsBackupObjects(t *testing.T) {
 				Placement:   domain.PlacementSelfHosted,
 				Credentials: domain.SecretRef{Name: "orders-db-app"},
 				Guarantees: domain.Guarantees{
-					RPO: &domain.RPOGuarantee{Target: time.Hour},
+					RPO: &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"},
 				},
 			},
 		},
+		Externals: []domain.External{backupsExternal()},
 	}
 	manifests, err := flux.New().Emit(stack)
 	if err != nil {
@@ -234,8 +254,67 @@ func TestEmitWithRPOGuaranteeEmitsBackupObjects(t *testing.T) {
 	if !bytes.Contains(sb, []byte("@every 1h0m0s")) {
 		t.Errorf("ScheduledBackup schedule does not derive from the declared RPO:\n%s", sb)
 	}
-	if !bytes.Contains(manifests.Files["apps/week-one/orders-db-cluster.yaml"], []byte("backup:")) {
+	if !bytes.Contains(sb, []byte("d7s.dev/guarantee-durability: conditional-on-external")) {
+		t.Errorf("ScheduledBackup does not carry the CONDITIONAL durability label:\n%s", sb)
+	}
+	cluster := manifests.Files["apps/week-one/orders-db-cluster.yaml"]
+	if !bytes.Contains(cluster, []byte("backup:")) {
 		t.Error("Cluster CR does not carry spec.backup despite a declared rpo guarantee")
+	}
+	if !bytes.Contains(cluster, []byte("barmanObjectStore:")) {
+		t.Errorf("Cluster CR does not carry spec.backup.barmanObjectStore:\n%s", cluster)
+	}
+	if !bytes.Contains(cluster, []byte("destinationPath: s3://d7s-backups/")) ||
+		!bytes.Contains(cluster, []byte("endpointURL: https://minio.d7s-harness.svc:9000")) {
+		t.Errorf("Cluster CR's barmanObjectStore is not wired from the declared external:\n%s", cluster)
+	}
+	if !bytes.Contains(cluster, []byte("name: backups-credentials")) {
+		t.Errorf("Cluster CR's s3Credentials do not reference the declared external's Secret:\n%s", cluster)
+	}
+	if !bytes.Contains(cluster, []byte("d7s.dev/guarantee-durability: conditional-on-external")) {
+		t.Errorf("Cluster CR does not carry the CONDITIONAL durability label:\n%s", cluster)
+	}
+	if len(manifests.Conditionals) != 1 {
+		t.Fatalf("expected exactly 1 conditional-guarantee notice, got %+v", manifests.Conditionals)
+	}
+	c := manifests.Conditionals[0]
+	if c.Component != "orders-db" {
+		t.Errorf("conditional.Component = %q, want orders-db", c.Component)
+	}
+	if !strings.Contains(c.Label, "d7s.dev/guarantee-durability") || !strings.Contains(c.Label, "conditional-on-external") {
+		t.Errorf("conditional.Label = %q, missing the annotation key/value", c.Label)
+	}
+	if !strings.Contains(c.Reason, `external store "backups"`) {
+		t.Errorf("conditional.Reason = %q, does not name the external store", c.Reason)
+	}
+}
+
+// TestEmitRPOResolvesNeverInlinesCredentialValue proves the s3Credentials
+// CNPG reads are always secretKeyRef-shaped references, never a literal
+// value (golden rule 51) — the declared external only ever names a
+// Kubernetes Secret, so there is nothing else for the emitter to inline.
+func TestEmitRPOResolvesNeverInlinesCredentialValue(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				Guarantees: domain.Guarantees{
+					RPO: &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"},
+				},
+			},
+		},
+		Externals: []domain.External{backupsExternal()},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	cluster := string(manifests.Files["apps/week-one/orders-db-cluster.yaml"])
+	if !strings.Contains(cluster, "key: ACCESS_KEY_ID") || !strings.Contains(cluster, "key: ACCESS_SECRET_KEY") {
+		t.Errorf("Cluster CR's s3Credentials are not keyed by the fixed convention:\n%s", cluster)
 	}
 }
 
@@ -253,10 +332,11 @@ func TestEmitUnsatisfiableRPORefused(t *testing.T) {
 				Placement:   domain.PlacementSelfHosted,
 				Credentials: domain.SecretRef{Name: "orders-db-app"},
 				Guarantees: domain.Guarantees{
-					RPO: &domain.RPOGuarantee{Target: 2 * time.Minute},
+					RPO: &domain.RPOGuarantee{Target: 2 * time.Minute, BackupTo: "backups"},
 				},
 			},
 		},
+		Externals: []domain.External{backupsExternal()},
 	}
 	manifests, err := flux.New().Emit(stack)
 	if err == nil {
@@ -270,6 +350,118 @@ func TestEmitUnsatisfiableRPORefused(t *testing.T) {
 	}
 	if len(manifests.Files) != 0 {
 		t.Errorf("expected no files written on refusal, got %v", sortedKeys(manifests.Files))
+	}
+}
+
+// durabilityExampleStack mirrors examples/week-three/durability-stack.yaml:
+// a self-hosted postgres declaring guarantees.rpo wired to a declared
+// external object store — the durability triple reconnected (week-three
+// plan, slices 1+2).
+func durabilityExampleStack() domain.Stack {
+	return domain.Stack{
+		Name: "week-three",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				Guarantees: domain.Guarantees{
+					RPO: &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"},
+				},
+			},
+		},
+		Externals: []domain.External{backupsExternal()},
+	}
+}
+
+// TestEmitDurabilityGoldenFiles pins the durability-triple artifact
+// against the checked-in golden tree (golden rule 45): the CNPG Cluster's
+// barmanObjectStore, the ScheduledBackup, and the CONDITIONAL annotation
+// on both, wired from examples/week-three/durability-stack.yaml's
+// declared external.
+func TestEmitDurabilityGoldenFiles(t *testing.T) {
+	manifests, err := flux.New().Emit(durabilityExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+
+	want := readGoldenDir(t, filepath.Join("testdata", "golden", "durability"))
+
+	if len(manifests.Files) != len(want) {
+		t.Fatalf("emitted %d files, golden has %d\nemitted: %v\ngolden: %v",
+			len(manifests.Files), len(want), sortedKeys(manifests.Files), sortedKeys(want))
+	}
+	for path, wantBytes := range want {
+		gotBytes, ok := manifests.Files[path]
+		if !ok {
+			t.Errorf("golden file %s was not emitted", path)
+			continue
+		}
+		if !bytes.Equal(gotBytes, wantBytes) {
+			t.Errorf("emitted %s differs from golden:\n--- got ---\n%s\n--- want ---\n%s", path, gotBytes, wantBytes)
+		}
+	}
+}
+
+// TestEmitDurabilityDeterministic compiles the durability example twice
+// and requires byte-identical output (golden rules 22, 45).
+func TestEmitDurabilityDeterministic(t *testing.T) {
+	a, err := flux.New().Emit(durabilityExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (first): %v", err)
+	}
+	b, err := flux.New().Emit(durabilityExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (second): %v", err)
+	}
+	if len(a.Files) != len(b.Files) {
+		t.Fatalf("file count differs across compiles: %d vs %d", len(a.Files), len(b.Files))
+	}
+	for path, want := range a.Files {
+		got, ok := b.Files[path]
+		if !ok {
+			t.Fatalf("second compile is missing file %s", path)
+		}
+		if !bytes.Equal(want, got) {
+			t.Errorf("file %s is not byte-identical across compiles", path)
+		}
+	}
+}
+
+// TestEmitWeekOneAndManagedExamplesUnaffectedByDurability proves adding
+// the durability triple's wiring did not change one byte of the existing
+// week-one or managed golden output (no regression) — neither example
+// declares guarantees.rpo or an external, so the new machinery must be
+// fully inert for them.
+func TestEmitWeekOneAndManagedExamplesUnaffectedByDurability(t *testing.T) {
+	selfHosted, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit (self-hosted): %v", err)
+	}
+	wantSelfHosted := readGoldenDir(t, filepath.Join("testdata", "golden", "week-one"))
+	if len(selfHosted.Files) != len(wantSelfHosted) {
+		t.Fatalf("self-hosted: emitted %d files, golden has %d", len(selfHosted.Files), len(wantSelfHosted))
+	}
+	for path, wantBytes := range wantSelfHosted {
+		gotBytes, ok := selfHosted.Files[path]
+		if !ok || !bytes.Equal(gotBytes, wantBytes) {
+			t.Errorf("self-hosted golden file %s regressed", path)
+		}
+	}
+
+	managed, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (managed): %v", err)
+	}
+	wantManaged := readGoldenDir(t, filepath.Join("testdata", "golden", "managed"))
+	if len(managed.Files) != len(wantManaged) {
+		t.Fatalf("managed: emitted %d files, golden has %d", len(managed.Files), len(wantManaged))
+	}
+	for path, wantBytes := range wantManaged {
+		gotBytes, ok := managed.Files[path]
+		if !ok || !bytes.Equal(gotBytes, wantBytes) {
+			t.Errorf("managed golden file %s regressed", path)
+		}
 	}
 }
 

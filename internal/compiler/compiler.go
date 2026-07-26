@@ -1,9 +1,15 @@
 // Package compiler is the compiler core (golden rule 9's named plane):
-// it validates a declaration and drives a target emitter. Cross-component
-// wiring logic lives here, never precipitated into an emitter adapter —
-// though week one has exactly one component kind, so there is no
-// cross-component wiring to exercise yet (a known, deliberate gap, not
-// an implicit promise — golden rule 7).
+// it validates a declaration and drives a target emitter. Week-three plan
+// slices 1+2 introduced the first real cross-declaration reference
+// (Postgres.Guarantees.RPO.BackupTo naming a sibling External) — its
+// referential validity (does the name resolve at all?) is checked in
+// Stack.Validate (internal/domain/stack.go), the declaration model's own
+// aggregator, since that check is target-agnostic; resolving a validated
+// reference into a target's actual emitted shape (the CNPG
+// barmanObjectStore fields) is target-specific and stays in the Flux
+// emitter (internal/adapters/flux/durability.go) — never precipitated
+// into this package, which still does no target-specific shaping of its
+// own.
 package compiler
 
 import (

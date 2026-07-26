@@ -113,20 +113,29 @@ func TestPostgresValidateWithoutAllowedConsumersOrMTLSManagedCompiles(t *testing
 }
 
 // TestPostgresValidateRPORefusedOnManagedPlacementToo verifies
-// guarantees.rpo continues to refuse on managed placement too — not
-// assumed from the self-hosted case, since the two placements are
-// validated by separate switch arms above it.
+// guarantees.rpo continues to refuse on managed placement too (week-three
+// plan: the durability guarantee now compiles for self-hosted placement,
+// but the managed emitter still has no destination wiring) — not assumed
+// from the self-hosted case, since the two placements are validated by
+// separate switch arms above it. BackupTo is well-formed here (a non-empty
+// name) so this pins the managed-placement refusal specifically, not the
+// missing-backupTo refusal (whether that name resolves to a declared
+// external is a stack-level question Postgres.Validate cannot see).
 func TestPostgresValidateRPORefusedOnManagedPlacementToo(t *testing.T) {
 	p := validPostgres()
 	p.Placement = domain.PlacementManaged
 	p.Guarantees.MTLS = nil
-	p.Guarantees.RPO = &domain.RPOGuarantee{Target: time.Hour}
+	p.Guarantees.RPO = &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"}
 	errs := p.Validate()
 	if len(errs) != 1 {
 		t.Fatalf("expected exactly 1 error, got %v", errs)
 	}
-	if !strings.Contains(errs[0].Error(), "planned, not yet available") {
-		t.Errorf("error %q does not carry the remedy (golden rule 35)", errs[0].Error())
+	got := errs[0].Error()
+	if !strings.Contains(got, "guarantees.rpo + placement: managed refuses to compile") {
+		t.Errorf("error %q does not name the boundary", got)
+	}
+	if !strings.Contains(got, "placement: self-hosted") || !strings.Contains(got, "remove guarantees.rpo") {
+		t.Errorf("error %q does not carry the remedy (golden rule 35)", got)
 	}
 }
 
@@ -150,13 +159,14 @@ func TestPostgresValidateUnknownPlacementRefused(t *testing.T) {
 	}
 }
 
-// TestPostgresValidateRPOFailsClosed proves guarantees.rpo refuses to
-// compile in the same fail-closed style as placement: managed (golden
-// rules 34, 35; owner decision, week-one plan "Owner decisions —
-// 2026-07-26"): v1 has no declarable backup destination, so the
-// durability guarantee's conformance probe could never pass, for any
-// declared target — not only an unsatisfiable one.
-func TestPostgresValidateRPOFailsClosed(t *testing.T) {
+// TestPostgresValidateRPOWithoutBackupToFailsClosed proves guarantees.rpo
+// refuses to compile in the same fail-closed style as placement: managed
+// (golden rules 34, 35) when no destination is named — week-three plan,
+// slices 1+2: v1 has exactly one declarable destination shape (a declared
+// external object store) and no default, so a bare RPO with no backupTo
+// still cannot compile, though the remedy now names the external block
+// rather than claiming the guarantee is unimplemented outright.
+func TestPostgresValidateRPOWithoutBackupToFailsClosed(t *testing.T) {
 	p := validPostgres()
 	p.Guarantees.RPO = &domain.RPOGuarantee{Target: time.Hour}
 	errs := p.Validate()
@@ -164,14 +174,25 @@ func TestPostgresValidateRPOFailsClosed(t *testing.T) {
 		t.Fatalf("expected exactly 1 error, got %v", errs)
 	}
 	got := errs[0].Error()
-	if !strings.Contains(got, "planned, not yet available") {
+	if !strings.Contains(got, "requires backupTo naming a declared external") {
+		t.Errorf("error %q does not name the missing destination", got)
+	}
+	if !strings.Contains(got, "declare an external block") || !strings.Contains(got, "remove guarantees.rpo") {
 		t.Errorf("error %q does not carry the remedy (golden rule 35)", got)
 	}
-	if !strings.Contains(got, "remove guarantees.rpo") {
-		t.Errorf("error %q does not name the concrete remedy", got)
-	}
-	if !strings.Contains(got, "conformance probe could never pass") {
-		t.Errorf("error %q does not state why (golden rule 34)", got)
+}
+
+// TestPostgresValidateRPOWithBackupToCompiles proves guarantees.rpo now
+// compiles once a destination is named (week-three plan, slices 1+2):
+// the seam that used to fail unconditionally. Whether "backups" actually
+// resolves to a declared external is a stack-level question
+// (Stack.Validate) Postgres.Validate has no visibility into, so this is
+// silent on that — only proving the postgres-level check passes.
+func TestPostgresValidateRPOWithBackupToCompiles(t *testing.T) {
+	p := validPostgres()
+	p.Guarantees.RPO = &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"}
+	if errs := p.Validate(); len(errs) != 0 {
+		t.Fatalf("expected no errors, got %v", errs)
 	}
 }
 
@@ -186,11 +207,10 @@ func TestPostgresValidateWithoutRPOCompiles(t *testing.T) {
 }
 
 // TestPostgresValidateRPORefusalAggregatesWithOtherErrors pins the
-// owner decision's "aggregates with other validation errors" claim
-// (rules 33, 39) for guarantees.rpo specifically: a declaration with
-// both an unknown placement and a declared rpo must report both
-// problems together in one Validate() call, not just the rpo refusal
-// alone or the placement error alone.
+// "aggregates with other validation errors" claim (rules 33, 39) for
+// guarantees.rpo specifically: a declaration with both an unknown
+// placement and a declared rpo with no backupTo must report both
+// problems together in one Validate() call, not just one alone.
 func TestPostgresValidateRPORefusalAggregatesWithOtherErrors(t *testing.T) {
 	p := validPostgres()
 	p.Placement = "on-prem"
@@ -203,7 +223,7 @@ func TestPostgresValidateRPORefusalAggregatesWithOtherErrors(t *testing.T) {
 	if !strings.Contains(joined, "unknown placement") {
 		t.Errorf("aggregated errors %v do not include the unknown-placement error", errs)
 	}
-	if !strings.Contains(joined, "conformance probe could never pass") {
+	if !strings.Contains(joined, "requires backupTo naming a declared external") {
 		t.Errorf("aggregated errors %v do not include the rpo refusal", errs)
 	}
 }

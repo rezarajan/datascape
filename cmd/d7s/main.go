@@ -75,7 +75,24 @@ func runCompile(args []string) error {
 		return fmt.Errorf("d7s compile: %w", err)
 	}
 
-	return writeManifests(out, manifests)
+	if err := writeManifests(out, manifests); err != nil {
+		return err
+	}
+	printCompileSummary(manifests)
+	return nil
+}
+
+// printCompileSummary surfaces every conditionally-satisfied guarantee
+// visibly to whoever ran the compile (problem definition Amendment 2,
+// B3: a guarantee crossing the trust boundary compiles, but never
+// silently) — the same fact the compiled output itself carries as an
+// annotation (ports.ConditionalGuarantee), printed here a second time so
+// it cannot be missed by only reading files on disk.
+func printCompileSummary(manifests ports.Manifests) {
+	for _, c := range manifests.Conditionals {
+		fmt.Printf("CONDITIONAL: %s's %s guarantee compiled labeled %s — %s\n",
+			c.Component, c.Guarantee, c.Label, c.Reason)
+	}
 }
 
 // writeManifests is the only side effect d7s compile performs: writing

@@ -17,6 +17,19 @@ func (p Postgres) ComponentName() string { return p.Name }
 // Kind implements Component.
 func (p Postgres) Kind() ComponentKind { return KindPostgres }
 
+// ExternalRefs implements the externalReferencer interface
+// (internal/domain/stack.go): guarantees.rpo.backupTo is the only
+// external reference a Postgres component declares this week. Stack.
+// Validate cross-checks every name this returns against the stack's own
+// declared externals, refusing before compilation ever reaches an
+// emitter that would otherwise fail to resolve it.
+func (p Postgres) ExternalRefs() []string {
+	if p.Guarantees.RPO != nil && p.Guarantees.RPO.BackupTo != "" {
+		return []string{p.Guarantees.RPO.BackupTo}
+	}
+	return nil
+}
+
 // Validate reports every structural problem with p, aggregated rather
 // than stopping at the first (golden rule 33: validate-time
 // completeness). Both placements compile (week-two plan, slices 2+3):
@@ -68,6 +81,24 @@ func (p Postgres) Validate() []error {
 				"compiled authorization, and cannot cover a provider-terminated endpoint outside "+
 				"the mesh; choose placement: self-hosted to keep guarantees.mtls, or remove "+
 				"guarantees.mtls to keep placement: managed",
+			p.Name))
+	}
+
+	// guarantees.rpo + placement: managed refuses (week-three plan,
+	// unchanged from week-two): the durability guarantee now compiles
+	// for self-hosted placement (a declared external destination wires a
+	// barmanObjectStore into the CNPG Cluster), but the managed emitter
+	// has no destination wiring this week — no best-effort tier (golden
+	// rules 34, 37, 50). This refuses independently of whether
+	// guarantees.rpo.backupTo is itself well-formed (see
+	// Guarantees.Validate), so both problems are reported together when
+	// both are present (golden rule 33).
+	if p.Placement == PlacementManaged && p.Guarantees.RPO != nil {
+		errs = append(errs, fmt.Errorf(
+			"postgres component %q: guarantees.rpo + placement: managed refuses to compile — "+
+				"the managed emitter has no backup-destination wiring this week; choose "+
+				"placement: self-hosted to keep guarantees.rpo, or remove guarantees.rpo to keep "+
+				"placement: managed",
 			p.Name))
 	}
 

@@ -21,17 +21,17 @@ type Guarantees struct {
 
 	// RPO declares the durability/recovery guarantee: the maximum
 	// acceptable window of data loss, compiled to a backup schedule that
-	// honors it. v1 has no way to declare a backup destination, so this
-	// guarantee fails compilation closed unconditionally, on every
-	// placement (golden rules 34/35) — enforced in Validate below, not
-	// the compiler core: the guarantee can never be satisfied regardless
-	// of target, so there is nothing target-dependent for the compiler
-	// core or an emitter to check on the live path. The emitter-level
-	// satisfiability check and backup emitter remain in the tree, gated
-	// behind this refusal, for the week a destination becomes declarable
-	// (owner decision, week-one plan "Owner decisions — 2026-07-26");
-	// verified this still fires for placement: managed too (week-two
-	// plan) since this check does not branch on placement at all.
+	// honors it, plus a wired backup destination (week-three plan,
+	// slices 1+2: the destination is now declarable). BackupTo names a
+	// declared external object store (problem definition Amendment 2) —
+	// required, since v1 has exactly one way to declare a destination.
+	// A durability guarantee wired to a declared external compiles, but
+	// only labeled CONDITIONAL (Amendment 2, B3: it crosses the trust
+	// boundary, so the claim is only as strong as the external's own
+	// gate) — the emitter carries the label into every object it emits
+	// for it (internal/adapters/flux/durability.go). placement: managed
+	// still refuses (internal/domain/postgres.go): the managed emitter
+	// has no destination wiring this week.
 	RPO *RPOGuarantee
 }
 
@@ -41,28 +41,34 @@ type Guarantees struct {
 type MTLSGuarantee struct{}
 
 // RPOGuarantee is a recovery point objective: after a failure, data loss
-// must never exceed Target.
+// must never exceed Target, backed up to the external object store named
+// by BackupTo.
 type RPOGuarantee struct {
 	Target time.Duration
+	// BackupTo names a declared external (Stack.Externals) this
+	// guarantee's backups are written to. Required — v1 has exactly one
+	// destination shape declarable (an S3-compatible external object
+	// store) and no default. Whether the name actually resolves to a
+	// declared external is a stack-level, not a per-guarantee,
+	// question — checked in Stack.Validate (internal/domain/stack.go),
+	// since a lone Postgres component has no visibility into its
+	// siblings' declarations.
+	BackupTo string
 }
 
 // Validate reports every structural problem with g, aggregated rather
 // than stopping at the first (golden rule 33). guarantees.rpo refuses
-// unconditionally here, on every placement (golden rules 34, 35): v1 has
-// no way to declare a backup destination, so the durability guarantee's
-// conformance probe could never pass, for any declared target. The gated
-// emitter-level machinery (checkRPOSatisfiable, the ScheduledBackup emitter in
-// internal/adapters/flux/durability.go) stays in the tree, unit-tested,
-// for the week a destination becomes declarable — this refusal simply
-// never lets the compile path reach it.
+// here only when no destination is named — BackupTo is required because
+// v1 has exactly one declarable destination shape and no default (golden
+// rules 34, 35). Whether BackupTo actually names a declared external is
+// checked at the stack level (Stack.Validate), not here.
 func (g Guarantees) Validate(component string) []error {
 	var errs []error
-	if g.RPO != nil {
+	if g.RPO != nil && g.RPO.BackupTo == "" {
 		errs = append(errs, fmt.Errorf(
-			"postgres component %q: guarantees.rpo is planned, not yet available — "+
-				"v1 has no backup destination declarable, so the durability guarantee's "+
-				"conformance probe could never pass; remove guarantees.rpo (a declarable "+
-				"destination is planned for the week-two+ skeleton)",
+			"postgres component %q: guarantees.rpo requires backupTo naming a declared external "+
+				"object store — declare an external block (endpoint, bucket, credentials.secretRef) "+
+				"and set guarantees.rpo.backupTo to its name, or remove guarantees.rpo",
 			component))
 	}
 	return errs
