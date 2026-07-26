@@ -347,10 +347,26 @@ API twice each way. Final state: managed scenario green end to end incl. clean
 in-cluster destroy + API-verified no leak; self-hosted regression green; fast
 tier + flake check green. Contract review dispatched post-landing.
 
+## WEEK TWO COMPLETE; dogfood note 2 recorded (2026-07-26)
+
+All five exit criteria of `docs/plans/02-week-two.md` checked off, each verified
+by running. Owner decisions at landing (verbatim in the plan + problem
+definition): Q1.1a team name STRUCK ("immaterial to this project" — denominator 5
+stands); dogfood note 2 = the managed case (reversal of the separate-real-request
+answer, flagged). Note 2: `dogfood/managed-api`, **time-to-stack 2m53s**, real
+Neon branch via the full compiled path, probe from the written-outputs secret
+only; stack persists (d7s-dogfood + Neon project). Four operator-friction
+findings recorded in `docs/dogfood.md` (hardcoded component name in managed
+actions; GitRepository registration not an operator affordance; hand-supplied
+projectId; PodSecurity warning on the warm pod). **Kill review 2026-08-23: two
+stacks recorded, caveats in the dogfood record.** Remaining owner item: push
+main (first CI run of the full flake-gated pipeline; add NEON_API_KEY repo
+secret for the managed tier).
+
 ## Open items owned by the owner
 
-- **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
-  unrecorded — the open sliver, flagged in the problem definition.
+- **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
+  owner decision (verbatim in the problem definition).
 - **Week-two plan approval**: RESOLVED 2026-07-26 — **APPROVED as Revision 1** with
   one owner change (verbatim in the plan's "Approval round" section): Neon is
   bootstrapped locally, simulated control-plane surface named where needed, on

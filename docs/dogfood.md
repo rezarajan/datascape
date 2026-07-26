@@ -69,3 +69,45 @@ client refused as declared.
 **Verdict:** the compile-to-secure-running promise held on a real request shape with
 96% headroom against the target. Evidence caveats recorded above: kind substrate,
 agent-driven operator, placeholder names pending the owner's real ones.
+
+### Dogfood note 2 — managed-api stack (the managed case), 2026-07-26
+
+**Owner designation (verbatim, at slice-5 landing): "the second stack will be
+considered the managed case"** — flagged in the week-two plan as reversing the
+earlier separate-real-request answer; the kill review should read this stack's
+demand evidence as owner-designated, not independently requested.
+
+**Time-to-stack: 2m53s** from starting the declaration to SQL over TLS against a
+real Neon database, vs the <1h Q2.1 target. Environment prerequisite (tofu-controller
+v0.16.4 onto the existing `d7s-dogfood` cluster, runner image warmed): 34s before
+T0. Stack: `dogfood/managed-api/stack.yaml` (component `api-db`,
+`placement: managed`, credentials → `api-db-app`), compiled to
+`dogfood/managed-api/out/`, delivered through the in-cluster git source + Flux +
+tofu-controller — a real branch/database/role/endpoint in the owner's Neon project.
+The probe used ONLY the written-outputs secret at the declared `secretRef` name —
+zero out-of-band connection values. **The stack persists** (namespace + Terraform CR
+on `d7s-dogfood`; branch `api-db` in the Neon project) per the approved teardown
+policy: dogfood persists, harness runs stay ephemeral.
+
+**Friction observed (findings, not silently fixed):**
+
+1. **The managed harness actions hardcode the example component name** (`orders-db`
+   in deliver/probe/teardown waits) — parameterized for namespace/stack/out but not
+   component, so the operator hand-drove delivery with kubectl/flux instead of
+   reusing `deliver-managed`/`probe-managed`. Harness ≠ operator tooling yet.
+2. **GitRepository registration is inside a harness action, not the documented
+   operator flow or compiled output.** The operator must know the git server's
+   service URL and namespace out of band (and the namespace differs from the
+   deployment's name — `d7s-harness-git` vs `d7s-gitserver` — which cost a failed
+   attempt). The documented flow's "git push; flux reconcile" needs the
+   GitRepository named as an explicit environment prerequisite.
+3. **The `projectId` secret key is hand-supplied in the operator flow** — the
+   harness self-discovers it from the key's scope error, the operator has no
+   equivalent affordance.
+4. **PodSecurity warning** on the `tf-runner-warm` pod (violates `restricted`
+   profile) — cosmetic on kind, a real blocker on a restricted-enforcing cluster.
+
+**Verdict:** the seam holds as a dogfood stack — same declaration shape, placement
+flipped, real managed database running with compiler-wired credentials, at 95%
+headroom against the target. Kill-review status: **two stacks recorded** (caveats:
+both kind-substrate, both agent-driven, note 2's demand owner-designated).

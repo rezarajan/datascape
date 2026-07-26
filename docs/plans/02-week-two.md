@@ -71,18 +71,30 @@ any second component kind; compiling Flux/mesh/tofu-controller installs; self-se
 
 ## Exit criteria (verified by running — rule 58)
 
-- [ ] The dogfood declaration with only `placement` flipped compiles to the managed
+- [x] The dogfood declaration with only `placement` flipped compiles to the managed
       artifact; two compiles byte-identical; golden files pin both placements.
-- [ ] On a kind cluster: tofu-controller reconciles the emitted CR; a real Neon
+      **Verified 2026-07-26** — golden fixtures for both placements, determinism
+      live in every harness run (Revision 4 shape: branch-per-stack).
+- [x] On a kind cluster: tofu-controller reconciles the emitted CR; a real Neon
       database is provisioned; the probe runs SQL against it using only compiled
       references; harness teardown destroys the Neon resources — verified by
-      listing them after.
-- [ ] `mtls` + `managed` refuses with the remedy in the error; the refusal is
-      demonstrated able to fail and pass.
-- [ ] The CNPG acceptance scenario runs through Flux (git source → Kustomizations →
+      listing them after. **Verified 2026-07-26** — clean `acceptance-managed` run:
+      CR Ready, real branch/database/role/endpoint, `SELECT 1` over TLS from the
+      written-outputs secret only, in-cluster destroy completed, Neon API confirmed
+      no leaked branch. (Ten live attempts to get here; five distinct root causes
+      fixed — campaign log in TASK_PROGRESS.md.)
+- [x] `mtls` + `managed` refuses with the remedy in the error; the refusal is
+      demonstrated able to fail and pass. **Verified 2026-07-26** — contract tests
+      fail-then-pass, and the refusal runs live in `compile-and-verify`.
+- [x] The CNPG acceptance scenario runs through Flux (git source → Kustomizations →
       reconcile), not direct apply; the week-one narrowed claims are un-narrowed.
-- [ ] Dogfood note 2 recorded: a second real stack (the kill review needs 2+ by
-      2026-08-23).
+      **Verified 2026-07-26** — slice 4 (`3d948b2` + `02246be`), seven-object
+      managedFields guard; regression re-passed after slice 5's shared refactors.
+- [x] Dogfood note 2 recorded: a second real stack (the kill review needs 2+ by
+      2026-08-23). **Recorded 2026-07-26** — the managed case, by owner designation
+      (reversal flagged above): `dogfood/managed-api` at 2m53s time-to-stack,
+      persisting on `d7s-dogfood` + the Neon project. See `docs/dogfood.md` note 2
+      for the four operator-friction findings.
 
 ## Open questions for the owner (at approval)
 

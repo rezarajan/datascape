@@ -1,0 +1,10 @@
+apiVersion: d7s.dev/v1alpha1
+kind: Stack
+name: managed-api
+components:
+  - kind: postgres
+    name: api-db
+    placement: managed
+    credentials:
+      secretRef:
+        name: api-db-app

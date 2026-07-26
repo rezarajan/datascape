@@ -1,0 +1,32 @@
+apiVersion: infra.contrib.fluxcd.io/v1alpha2
+kind: Terraform
+metadata:
+  name: api-db
+  namespace: managed-api
+  labels:
+    d7s.dev/component: api-db
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: managed-api
+spec:
+  interval: 10m
+  path: ./out/apps/managed-api/api-db-managed
+  approvePlan: auto
+  sourceRef:
+    kind: GitRepository
+    name: d7s
+    namespace: flux-system
+  runnerPodTemplate:
+    spec:
+      env:
+        - name: NEON_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: neon-api-key
+              key: apiKey
+  varsFrom:
+    - kind: Secret
+      name: neon-api-key
+      varsKeys:
+        - projectId:project_id
+  writeOutputsToSecret:
+    name: api-db-app

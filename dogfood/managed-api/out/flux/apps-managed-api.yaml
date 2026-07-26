@@ -1,0 +1,16 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: managed-api
+  namespace: flux-system
+  labels:
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: managed-api
+spec:
+  interval: 10m
+  path: ./out/apps/managed-api
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: d7s
+    namespace: flux-system

@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tf-runner
+  namespace: managed-api
+  labels:
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: managed-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tf-runner-role
+subjects:
+  - kind: ServiceAccount
+    name: tf-runner
+    namespace: managed-api
