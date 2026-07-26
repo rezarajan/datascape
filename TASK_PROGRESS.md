@@ -314,6 +314,39 @@ monolith. Remaining week-two work: slice 5 (managed/Neon acceptance + credential
 wiring via writeOutputsToSecret or explicit re-deferral + API-key process + CI
 managed-tier gating) — blocked on the owner's NEON_API_KEY.
 
+## Week-two slice 5 — live verification campaign log (2026-07-26, ongoing)
+
+The managed scenario's live runs surfaced five distinct real-world defects, none
+visible from `go test` (golden rule 40), each diagnosed from captured evidence and
+fixed in turn: (1) harness ordering — tofu-controller installed before `flux
+install` created its target namespace; (2) `kind load docker-image` fails on
+multi-arch ctr import — replaced with a kubelet-driven image warm (disposable pod);
+(3) tofu-controller v0.16 disables cross-namespace source refs by default —
+steward decision: enable at install (matches the cluster's kustomize-controller
+posture; full multi-tenancy hardening is named skeleton work), rewritten into the
+release manifest pre-apply and asserted against the running deployment; (4) runner
+pods need the `tf-runner` ServiceAccount in the CR's own namespace — now compiled
+into the stack namespace by the managed emitter (static, deterministic wiring);
+(5) **upstream provider defect, open:** the destroy APPLY fails repeatably with
+"unexpected end of JSON input" (empty-body JSON-decode class) though the destroy
+plan succeeds — provider-version bisect in progress. **The managed scenario itself
+PASSED live twice** (real branch provisioned through Flux + tofu-controller, SQL
+over TLS using only the written-outputs secret at the declared secretRef name).
+Two teardown leaks occurred while the destroy leg was broken; both caught by the
+harness's API leak-check, both deleted (one manually by the steward, one by the
+harness's new self-cleaning-but-still-failing remediation). Owner's project
+verified clean after each. GPG remains locked; all commits held.
+
+**Slice 5 LANDED (2026-07-26, commit `29e9364`; Revision 4 record `136c47d`).**
+Defect (5) resolved — not a provider version: a missing `depends_on` between
+`neon_role` and `neon_endpoint` let OpenTofu parallelize create/destroy, racing
+into the Neon SDK's unchecked empty-body JSON decode (real upstream fragility,
+no matching issue filed; reachable only via the race). One dependency edge fixed
+both legs on the already-pinned 0.14.0, proven by toggling it against the real
+API twice each way. Final state: managed scenario green end to end incl. clean
+in-cluster destroy + API-verified no leak; self-hosted regression green; fast
+tier + flake check green. Contract review dispatched post-landing.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
