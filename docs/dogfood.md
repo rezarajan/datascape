@@ -111,3 +111,31 @@ policy: dogfood persists, harness runs stay ephemeral.
 flipped, real managed database running with compiler-wired credentials, at 95%
 headroom against the target. Kill-review status: **two stacks recorded** (caveats:
 both kind-substrate, both agent-driven, note 2's demand owner-designated).
+
+### Dogfood note 3 — first human cold run, 2026-07-26
+
+A teammate (the owner's chosen developer — the first non-agent operator) ran the
+QUICKSTART cold and hit an error. Recorded verbatim as relayed by the owner
+(terminal output, trimmed to the failure):
+
+> `❯ nix run .#deliver` … `==> backups-credentials secret: materialize in
+> week-one from minio's root credentials` — `Error from server (NotFound):
+> namespaces "d7s-harness-minio" not found`
+
+**Diagnosis (steward, same day):** the developer followed QUICKSTART's piecemeal
+action sequence, which was **stale after slice 3**: it lists `cluster-up →
+flux-install → istio-install → git-source → deliver → guard → probes` but omits
+`minio-install`, which slice 3 added to the orchestrator when the week-one stack
+gained the durability guarantee — so `deliver`'s minio-secret step found no MinIO
+namespace. Two adjacent defects found on inspection: QUICKSTART's example
+`external` block shows `https://minio.d7s-harness.svc:9000` — wrong scheme AND
+wrong namespace (truth: `http://minio.d7s-harness-minio.svc:9000`), a copy-paste
+trap; and `deliver` fails with a raw Kubernetes NotFound instead of a
+prerequisite check carrying the remedy ("run minio-install first") — the
+errors-carry-remedy culture stops at the compiler's edge and should not.
+
+**Reading:** the cold run did exactly what it exists to do — the failure is
+doc/tooling drift between slices, found by the first human within minutes, on
+the piecemeal path no agent run exercises (agents and CI run the orchestrator,
+which is why every green run missed it). Fixes dispatched same day; the
+re-verified piecemeal path lands as an addendum below.
