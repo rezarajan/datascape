@@ -81,12 +81,37 @@ slice toward the Q3.1 skeleton in weeks 2–4.
 
 ## Exit criteria (verified by running — rule 58)
 
-- [ ] Acceptance scenario passes on a fresh kind cluster, invoked as documented.
-- [ ] Negative probe demonstrably fails when policy is removed (the test can fail).
-- [ ] Golden files pin compiled output; two compiles are byte-identical.
-- [ ] Arch test and commit-style gate green; both demonstrated able to fail.
+- [x] Acceptance scenario passes on a fresh kind cluster, invoked as documented.
+      **Verified 2026-07-26** via `scripts/acceptance-kind.sh`, run end to end with no
+      manual steps: kind + Flux + Istio ambient + CNPG, the documented `d7s compile`
+      invocation, both required negative probes, the durability probe, a positive mTLS
+      probe, ephemeral teardown.
+- [x] Negative probe demonstrably fails when policy is removed (the test can fail).
+      **Verified 2026-07-26** manually against the live cluster: removing the app
+      namespace's ambient label let the off-mesh client connect; restoring it restored
+      the refusal. Not re-demonstrated on every harness run — proven once, live.
+- [x] Golden files pin compiled output; two compiles are byte-identical.
+- [x] Arch test and commit-style gate green; both demonstrated able to fail.
 - [ ] First dogfood note recorded: time-to-stack measured against the <1 hour target
       (Q2.1), on the owner's real request if one exists this week.
+
+### Environment prerequisites found by running the harness live (2026-07-26)
+
+Not compiled by d7s this week (week-one plan, "explicitly NOT this week") — the
+platform team must provide these before applying compiled output:
+
+- **The postgres component's credentials Secret must exist before the Cluster CR is
+  applied.** CNPG's `bootstrap.initdb.secret` only consumes a pre-existing secret; it
+  does not generate one for a caller-supplied name (`internal/domain/secret.go`).
+- **A StorageClass with `reclaimPolicy: Retain`, if golden rule 28's retain-on-delete
+  matters for the deployment.** CNPG's `Cluster.spec.storage` has no field of its own
+  for this — retention is purely a `StorageClass` property, and d7s cannot safely
+  guess a target cluster's CSI provisioner to compile one (golden rule 15). **Owner
+  decision, 2026-07-26:** document as a prerequisite rather than add a schema field
+  this week; revisit when placement/storage gets dedicated design attention. Verified
+  live that the mechanism works when the prerequisite is met (a `Retain`-policy
+  StorageClass left the underlying volume `Released`, not deleted, after the Cluster
+  CR was removed) — the gap is scope, not a broken mechanism.
 
 ## Open questions for the owner (blocking only where marked)
 
@@ -126,8 +151,17 @@ week one must prove it.
    the ScheduledBackup exists and fires once on the kind cluster; then declare an
    unsatisfiable RPO and verify compilation refuses (the negative probe for the
    guarantee primitive — the check must be able to fail, rule 49).
-4. **Exit criteria add:** [ ] both guarantee triples demonstrated as triples — check,
-   emitted infra, and probe each shown working AND shown able to fail.
+4. **Exit criteria add:** [x] both guarantee triples demonstrated as triples — check,
+   emitted infra, and probe each shown working AND shown able to fail. **Verified
+   2026-07-26.** Transport security: PeerAuthentication + AuthorizationPolicy emitted;
+   positive probe (declared consumer, mTLS) and two negative probes (undeclared
+   in-mesh identity; off-mesh plaintext) all live; the refusal shown able to fail (see
+   above). Durability: ScheduledBackup emitted from the declared RPO; the probe
+   confirms a `Backup` object appears (fires) — it fails with "no barmanObjectStore
+   section defined," the documented, deliberate gap since v1 has no object-storage
+   component to resolve a destination from (`internal/adapters/flux/durability.go`);
+   the unsatisfiable-RPO compile-time refusal is the triple's negative probe and is
+   verified live in `scripts/acceptance-kind.sh`.
 5. **Open question for approval (blocking week two, not week one):** managed-emit
    artifact for the seam pair — recommendation: Flux tf-controller `Terraform` CR,
    keeping a single delivery plane; plain Terraform module is the fallback if the team
