@@ -410,6 +410,20 @@ merged HEAD; README refreshed (`0f8e140`, `90eb88f`). Five of six exit criteria
 checked off, verified by running. **Open: dogfood note 3 — the teammate's cold
 QUICKSTART run (owner picks the developer).** Kill review 2026-08-23.
 
+## WEEK THREE COMPLETE — all six exit criteria checked (2026-07-26)
+
+Dogfood note 3 recorded: the first human cold run (a real teammate) found the
+piecemeal-path drift within minutes — the exact class of evidence no agent or CI
+run could produce, since both always drive the orchestrator. Fixed and
+re-verified same day (`12672d1`): documented commands run literally on a fresh
+cluster; deliver's new prerequisite checks shown failing-with-remedy and
+passing. Follow-on finding named for next planning: the self-hosted piecemeal
+actions hardcode the example's names (week-one) — a novel self-hosted stack
+can't be delivered piecemeal; the managed actions' parameterization pattern is
+the template. Owner items: **push** (20 commits), thank the developer.
+Kill review 2026-08-23: two real stacks, three dogfood notes, both guarantee
+families live (one CONDITIONAL per contract), both placements proven.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by

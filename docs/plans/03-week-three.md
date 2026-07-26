@@ -93,10 +93,15 @@ component kind or second GitOps target; restore operation (day-2, refused).
       CI/harness. **Verified 2026-07-26** (`97c026d`, `cc025d9`) — flake `d7s`
       package in the dev shell; a CI quickstart job exercises the built binary;
       every documented command actually run.
-- [ ] **Dogfood note 3: a human teammate (not the owner, not an agent) runs the
+- [x] **Dogfood note 3: a human teammate (not the owner, not an agent) runs the
       QUICKSTART cold and their outcome — success or friction — is recorded
       verbatim.** The kill review reads this as the first non-agent evidence.
-      **The only open criterion — waits on the owner's chosen developer.**
+      **Recorded 2026-07-26** — friction: the piecemeal path failed on
+      slice-drift QUICKSTART never caught (missing minio-install; two adjacent
+      traps found on inspection). Recorded verbatim in `docs/dogfood.md` note 3;
+      fixed and re-verified same day (`12672d1`) by running the documented
+      commands literally; one follow-on finding (self-hosted actions lack the
+      managed actions' parameterization) named for the next planning round.
 - [x] Managed actions run against a differently-named component (the note-2
       hardcoding finding closed, demonstrated). **Verified 2026-07-26**
       (`2c7d8ae`, fixes `d1ef150`) — component `widgets-db` ran the full managed

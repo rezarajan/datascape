@@ -139,3 +139,18 @@ doc/tooling drift between slices, found by the first human within minutes, on
 the piecemeal path no agent run exercises (agents and CI run the orchestrator,
 which is why every green run missed it). Fixes dispatched same day; the
 re-verified piecemeal path lands as an addendum below.
+
+**Addendum (same day, 2026-07-26): fixed and re-verified (`12672d1`).** The
+piecemeal sequence in QUICKSTART now matches the orchestrator (minio-install and
+durability-probe included), the example endpoint is corrected, and `deliver`
+runs fail-closed prerequisite checks (Flux, Istio, MinIO) that refuse with the
+remedy — demonstrated live both failing (no MinIO → remedy message, exit 1) and
+passing (after minio-install → full delivery through durability probe and
+teardown), the documented commands run literally, one by one. **One further
+finding from the verification, named for the next planning round, not fixed:**
+QUICKSTART's own example stack (`name: quickstart`) cannot literally be
+delivered through the piecemeal actions, which hardcode the `week-one`
+namespace/Kustomization and read compiled output only from the repo's own
+`out/` — the self-hosted actions lack the parameterization the managed actions
+just gained. The first human's path ends at "compile your own stack"; delivery
+of a novel self-hosted stack still requires the example's names.
