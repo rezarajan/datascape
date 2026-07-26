@@ -4,3 +4,4 @@ metadata:
   name: cnpg-system
   labels:
     d7s.dev/managed-by: d7s
+    istio.io/dataplane-mode: ambient

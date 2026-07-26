@@ -44,6 +44,13 @@ const (
 	// defaultRetentionPolicy is fixed for v1: retention isn't yet a
 	// declared field (golden rule 7).
 	defaultRetentionPolicy = "30d"
+
+	// postgresPort and cnpgStatusPort are CNPG's fixed container ports
+	// (postgresql, status) — used to scope AuthorizationPolicy rules so
+	// the database allow-list never accidentally covers the operator's
+	// own control-plane traffic, or vice versa.
+	postgresPort   = "5432"
+	cnpgStatusPort = "8000"
 )
 
 // gitSourceRef is the Flux Source every Kustomization/HelmRelease this
@@ -98,6 +105,11 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 	}
 
 	files := map[string][]byte{}
+	if len(pgs) > 0 {
+		if err := emitCNPGOperator(files, meshEnabled); err != nil {
+			return ports.Manifests{}, err
+		}
+	}
 	if err := emitAppNamespace(files, stack.Name, meshEnabled); err != nil {
 		return ports.Manifests{}, err
 	}
@@ -156,9 +168,6 @@ func checkRPOSatisfiable(pg domain.Postgres) error {
 }
 
 func emitPostgres(files map[string][]byte, stackName string, pg domain.Postgres) error {
-	if err := emitCNPGOperator(files); err != nil {
-		return err
-	}
 	if err := emitCluster(files, stackName, pg); err != nil {
 		return err
 	}
@@ -201,14 +210,30 @@ func emitZeroTrust(files map[string][]byte, stackName string, pg domain.Postgres
 		return err
 	}
 
-	rules := make([]AuthorizationPolicyRule, 0, len(pg.AllowedConsumers))
+	rules := make([]AuthorizationPolicyRule, 0, len(pg.AllowedConsumers)+1)
 	for _, consumer := range pg.AllowedConsumers {
 		rules = append(rules, AuthorizationPolicyRule{
 			From: []AuthorizationPolicyFrom{
 				{Source: AuthorizationPolicySource{Principals: []string{principal(stackName, consumer)}}},
 			},
+			To: []AuthorizationPolicyTo{
+				{Operation: AuthorizationPolicyOperation{Ports: []string{postgresPort}}},
+			},
 		})
 	}
+	// The CNPG operator polls each instance's status endpoint to manage
+	// the cluster it created — not a declared consumer of the database,
+	// but an operational necessity of the durability guarantee's own
+	// emitted infra. Scoped to the status port only, never the database
+	// port, so it grants no data access.
+	rules = append(rules, AuthorizationPolicyRule{
+		From: []AuthorizationPolicyFrom{
+			{Source: AuthorizationPolicySource{Namespaces: []string{cnpgSystemNamespace}}},
+		},
+		To: []AuthorizationPolicyTo{
+			{Operation: AuthorizationPolicyOperation{Ports: []string{cnpgStatusPort}}},
+		},
+	})
 
 	authzPolicy := AuthorizationPolicy{
 		APIVersion: "security.istio.io/v1",
@@ -244,13 +269,26 @@ func principal(stackName string, consumer domain.AllowedConsumer) string {
 // the Flux Kustomization that reconciles them. Safe to call once per
 // stack even with multiple postgres components — later calls overwrite
 // identical bytes.
-func emitCNPGOperator(files map[string][]byte) error {
+// meshEnabled adds the operator's namespace to the Istio ambient mesh.
+// Found necessary by running the acceptance harness live: STRICT mTLS
+// on the app namespace rejects the operator's own status-polling
+// connection unless the operator's namespace can itself originate an
+// ambient (HBONE) connection — PeerAuthentication enforces at the
+// transport layer, before AuthorizationPolicy is ever evaluated, so
+// scoping the policy alone (see emitZeroTrust) was not sufficient
+// (golden rule 40: only a real workload on real infrastructure proved
+// this; rule 42: composition gets its own acceptance tests).
+func emitCNPGOperator(files map[string][]byte, meshEnabled bool) error {
+	labels := ownershipLabels("", "")
+	if meshEnabled {
+		labels["istio.io/dataplane-mode"] = "ambient"
+	}
 	ns := Namespace{
 		APIVersion: "v1",
 		Kind:       "Namespace",
 		Metadata: ObjectMeta{
 			Name:   cnpgSystemNamespace,
-			Labels: ownershipLabels("", ""),
+			Labels: labels,
 		},
 	}
 	if err := set(files, "infra/cnpg-operator/namespace.yaml", ns); err != nil {

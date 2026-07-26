@@ -45,8 +45,15 @@ type AuthorizationPolicySelector struct {
 }
 
 // AuthorizationPolicyRule is one entry of AuthorizationPolicy.spec.rules.
+// To scopes the rule to specific ports: found necessary while running
+// the acceptance harness live — an unscoped allow-list also gates CNPG's
+// own operator-to-instance status traffic (port 8000), which isn't a
+// declared consumer but an operational necessity of the durability
+// guarantee's own emitted infra (golden rule 40: only a real workload on
+// real infrastructure proved this).
 type AuthorizationPolicyRule struct {
 	From []AuthorizationPolicyFrom `yaml:"from"`
+	To   []AuthorizationPolicyTo   `yaml:"to,omitempty"`
 }
 
 // AuthorizationPolicyFrom is one entry of an AuthorizationPolicyRule.from.
@@ -54,9 +61,23 @@ type AuthorizationPolicyFrom struct {
 	Source AuthorizationPolicySource `yaml:"source"`
 }
 
-// AuthorizationPolicySource names the allowed peer by its mesh identity
-// (SPIFFE principal), resolved from the declared ServiceAccount — never
-// a hand-constructed address (golden rule 15).
+// AuthorizationPolicySource names the allowed peer. Principals resolve a
+// declared ServiceAccount to its mesh identity — never a hand-constructed
+// address (golden rule 15). Namespaces matches any identity within a
+// given namespace, used only for the operator's own control-plane rule,
+// never for declared consumers (those are always principal-scoped).
 type AuthorizationPolicySource struct {
-	Principals []string `yaml:"principals"`
+	Principals []string `yaml:"principals,omitempty"`
+	Namespaces []string `yaml:"namespaces,omitempty"`
+}
+
+// AuthorizationPolicyTo is one entry of an AuthorizationPolicyRule.to.
+type AuthorizationPolicyTo struct {
+	Operation AuthorizationPolicyOperation `yaml:"operation"`
+}
+
+// AuthorizationPolicyOperation scopes a rule to specific destination
+// ports.
+type AuthorizationPolicyOperation struct {
+	Ports []string `yaml:"ports,omitempty"`
 }

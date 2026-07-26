@@ -17,3 +17,22 @@ jobs:
         with:
           go-version-file: go.mod
       - run: ./scripts/check.sh
+
+  acceptance:
+    name: acceptance (kind)
+    runs-on: ubuntu-latest
+    # Deep tier (golden rule 43): explicit, impact-selected, not what a
+    # developer waits on locally. Native Docker on ubuntu-latest — no
+    # nested virtualization, same substrate kind/CNPG/Flux test on.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: helm/kind-action@v1
+        with:
+          install_only: true
+      - run: curl -sL https://istio.io/downloadIstioctl | sh -
+      - run: echo "$HOME/.istioctl/bin" >> "$GITHUB_PATH"
+      - run: ./scripts/acceptance-kind.sh

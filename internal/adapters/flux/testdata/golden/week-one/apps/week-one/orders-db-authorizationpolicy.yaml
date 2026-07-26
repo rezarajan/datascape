@@ -16,3 +16,15 @@ spec:
         - source:
             principals:
               - cluster.local/ns/week-one/sa/probe-client
+      to:
+        - operation:
+            ports:
+              - "5432"
+    - from:
+        - source:
+            namespaces:
+              - cnpg-system
+      to:
+        - operation:
+            ports:
+              - "8000"

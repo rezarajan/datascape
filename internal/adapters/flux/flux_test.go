@@ -113,20 +113,55 @@ func TestEmitWithoutMTLSGuaranteeEmitsNoZeroTrustObjects(t *testing.T) {
 	if bytes.Contains(manifests.Files["apps/week-one/namespace.yaml"], []byte("dataplane-mode")) {
 		t.Error("namespace carries the ambient dataplane label without a declared mtls guarantee")
 	}
+	if bytes.Contains(manifests.Files["infra/cnpg-operator/namespace.yaml"], []byte("dataplane-mode")) {
+		t.Error("cnpg-system namespace carries the ambient dataplane label without a declared mtls guarantee")
+	}
 }
 
-// TestEmitMTLSGuaranteeLabelsNamespaceAmbient proves the namespace joins
-// the Istio ambient mesh when mtls is declared: without this label,
-// ztunnel never intercepts the namespace's traffic and PeerAuthentication/
-// AuthorizationPolicy would exist but never be enforced (found by running
-// the acceptance harness against a live ambient mesh — golden rule 40).
-func TestEmitMTLSGuaranteeLabelsNamespaceAmbient(t *testing.T) {
+// TestEmitMTLSGuaranteeLabelsNamespaceAmbient proves both the app
+// namespace and the CNPG operator's own namespace join the Istio
+// ambient mesh when mtls is declared. Both are required: without the
+// app namespace's label, ztunnel never intercepts its traffic and
+// PeerAuthentication/AuthorizationPolicy would exist but never be
+// enforced; without the operator namespace's label, the operator itself
+// cannot originate an mTLS connection into the STRICT app namespace to
+// manage the cluster it created — PeerAuthentication enforces at the
+// transport layer, before AuthorizationPolicy is ever evaluated (found
+// by running the acceptance harness against a live ambient mesh —
+// golden rule 40; rule 42: composition gets its own acceptance tests).
+func TestEmitMTLSGuaranteeLabelsNamespacesAmbient(t *testing.T) {
 	manifests, err := flux.New().Emit(exampleStack())
 	if err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	if !bytes.Contains(manifests.Files["apps/week-one/namespace.yaml"], []byte("istio.io/dataplane-mode: ambient")) {
-		t.Error("namespace does not carry the ambient dataplane label despite a declared mtls guarantee")
+		t.Error("app namespace does not carry the ambient dataplane label despite a declared mtls guarantee")
+	}
+	if !bytes.Contains(manifests.Files["infra/cnpg-operator/namespace.yaml"], []byte("istio.io/dataplane-mode: ambient")) {
+		t.Error("cnpg-system namespace does not carry the ambient dataplane label despite a declared mtls guarantee")
+	}
+}
+
+// TestEmitAuthorizationPolicyScopesRulesByPort proves the AuthorizationPolicy
+// restricts declared consumers to the Postgres port and separately allows
+// the CNPG operator's own namespace to reach only the status port —
+// found necessary live: an unscoped allow-list also gated the operator's
+// own instance-status polling, which broke cluster management entirely
+// (golden rule 40).
+func TestEmitAuthorizationPolicyScopesRulesByPort(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	policy := string(manifests.Files["apps/week-one/orders-db-authorizationpolicy.yaml"])
+	if !strings.Contains(policy, `- "5432"`) {
+		t.Errorf("consumer rule is not scoped to the postgres port:\n%s", policy)
+	}
+	if !strings.Contains(policy, `- "8000"`) {
+		t.Errorf("operator rule is not scoped to the status port:\n%s", policy)
+	}
+	if !strings.Contains(policy, "namespaces:") || !strings.Contains(policy, "cnpg-system") {
+		t.Errorf("no operator-namespace allow rule present:\n%s", policy)
 	}
 }
 
