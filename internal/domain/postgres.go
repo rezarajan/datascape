@@ -4,10 +4,11 @@ import "fmt"
 
 // Postgres declares a Postgres-class database component.
 type Postgres struct {
-	Name        string
-	Placement   Placement
-	Credentials SecretRef
-	Guarantees  Guarantees
+	Name             string
+	Placement        Placement
+	Credentials      SecretRef
+	Guarantees       Guarantees
+	AllowedConsumers []AllowedConsumer
 }
 
 // ComponentName implements Component.
@@ -50,6 +51,19 @@ func (p Postgres) Validate() []error {
 	}
 
 	errs = append(errs, p.Guarantees.Validate(p.Name)...)
+
+	if len(p.AllowedConsumers) > 0 && p.Guarantees.MTLS == nil {
+		errs = append(errs, fmt.Errorf(
+			"postgres component %q: allowedConsumers declared without guarantees.mtls — there is no enforcement point without it; declare guarantees.mtls too",
+			p.Name))
+	}
+	for i, consumer := range p.AllowedConsumers {
+		if consumer.ServiceAccount == "" {
+			errs = append(errs, fmt.Errorf(
+				"postgres component %q: allowedConsumers[%d].serviceAccount is required",
+				p.Name, i))
+		}
+	}
 
 	return errs
 }

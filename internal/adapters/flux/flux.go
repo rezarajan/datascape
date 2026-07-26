@@ -78,7 +78,81 @@ func emitPostgres(files map[string][]byte, stackName string, pg domain.Postgres)
 	if err := emitCluster(files, stackName, pg); err != nil {
 		return err
 	}
+	if err := emitZeroTrust(files, stackName, pg); err != nil {
+		return err
+	}
 	return emitAppKustomization(files, stackName)
+}
+
+// emitZeroTrust compiles the transport-security guarantee triple's
+// emitted-infra element: STRICT PeerAuthentication plus an
+// AuthorizationPolicy whose allow rules come only from declared wiring
+// (golden rule 53) — an empty AllowedConsumers list compiles to a
+// default-deny AuthorizationPolicy (empty rules), never an implicit
+// allow. Emits nothing if the mtls guarantee isn't declared for pg.
+//
+// Known gap (golden rule 7): PeerAuthentication is namespace-wide by
+// Istio's own model, but the mtls guarantee is declared per component.
+// With one component per namespace this week that distinction doesn't
+// yet bite; it will need resolving before a second component can share
+// a namespace with mixed mtls declarations.
+func emitZeroTrust(files map[string][]byte, stackName string, pg domain.Postgres) error {
+	if pg.Guarantees.MTLS == nil {
+		return nil
+	}
+
+	peerAuth := PeerAuthentication{
+		APIVersion: "security.istio.io/v1",
+		Kind:       "PeerAuthentication",
+		Metadata: ObjectMeta{
+			Name:      "default",
+			Namespace: stackName,
+			Labels:    ownershipLabels(stackName, ""),
+		},
+		Spec: PeerAuthenticationSpec{
+			MTLS: PeerAuthenticationMTLS{Mode: "STRICT"},
+		},
+	}
+	if err := set(files, fmt.Sprintf("apps/%s/peerauthentication.yaml", stackName), peerAuth); err != nil {
+		return err
+	}
+
+	rules := make([]AuthorizationPolicyRule, 0, len(pg.AllowedConsumers))
+	for _, consumer := range pg.AllowedConsumers {
+		rules = append(rules, AuthorizationPolicyRule{
+			From: []AuthorizationPolicyFrom{
+				{Source: AuthorizationPolicySource{Principals: []string{principal(stackName, consumer)}}},
+			},
+		})
+	}
+
+	authzPolicy := AuthorizationPolicy{
+		APIVersion: "security.istio.io/v1",
+		Kind:       "AuthorizationPolicy",
+		Metadata: ObjectMeta{
+			Name:      pg.Name,
+			Namespace: stackName,
+			Labels:    ownershipLabels(stackName, pg.Name),
+		},
+		Spec: AuthorizationPolicySpec{
+			Selector: AuthorizationPolicySelector{
+				MatchLabels: map[string]string{"cnpg.io/cluster": pg.Name},
+			},
+			Rules: rules,
+		},
+	}
+	return set(files, fmt.Sprintf("apps/%s/%s-authorizationpolicy.yaml", stackName, pg.Name), authzPolicy)
+}
+
+// principal resolves a declared AllowedConsumer to its mesh identity
+// (SPIFFE principal). Namespace defaults to the component's own stack
+// namespace when the consumer doesn't declare one.
+func principal(stackName string, consumer domain.AllowedConsumer) string {
+	ns := consumer.Namespace
+	if ns == "" {
+		ns = stackName
+	}
+	return fmt.Sprintf("cluster.local/ns/%s/sa/%s", ns, consumer.ServiceAccount)
 }
 
 // emitCNPGOperator emits everything an empty cluster needs to run the

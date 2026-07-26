@@ -66,3 +66,30 @@ func TestPostgresValidateRejectsNonPositiveRPO(t *testing.T) {
 		t.Fatalf("expected a positive-duration error, got %v", errs)
 	}
 }
+
+func TestPostgresValidateAllowedConsumersRequireMTLS(t *testing.T) {
+	p := validPostgres()
+	p.Guarantees.MTLS = nil
+	p.AllowedConsumers = []domain.AllowedConsumer{{ServiceAccount: "probe-client"}}
+	errs := p.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "allowedConsumers declared without guarantees.mtls") {
+		t.Fatalf("expected an allowedConsumers-without-mtls error, got %v", errs)
+	}
+}
+
+func TestPostgresValidateAllowedConsumerRequiresServiceAccount(t *testing.T) {
+	p := validPostgres()
+	p.AllowedConsumers = []domain.AllowedConsumer{{}}
+	errs := p.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "serviceAccount is required") {
+		t.Fatalf("expected a serviceAccount-required error, got %v", errs)
+	}
+}
+
+func TestPostgresValidateAcceptsDeclaredConsumer(t *testing.T) {
+	p := validPostgres()
+	p.AllowedConsumers = []domain.AllowedConsumer{{ServiceAccount: "probe-client"}}
+	if errs := p.Validate(); len(errs) != 0 {
+		t.Fatalf("expected no errors, got %v", errs)
+	}
+}

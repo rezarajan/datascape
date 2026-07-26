@@ -34,11 +34,17 @@ type rawStack struct {
 }
 
 type rawComponent struct {
-	Kind        string          `yaml:"kind"`
-	Name        string          `yaml:"name"`
-	Placement   string          `yaml:"placement"`
-	Credentials *rawCredentials `yaml:"credentials"`
-	Guarantees  *rawGuarantees  `yaml:"guarantees"`
+	Kind             string               `yaml:"kind"`
+	Name             string               `yaml:"name"`
+	Placement        string               `yaml:"placement"`
+	Credentials      *rawCredentials      `yaml:"credentials"`
+	Guarantees       *rawGuarantees       `yaml:"guarantees"`
+	AllowedConsumers []rawAllowedConsumer `yaml:"allowedConsumers"`
+}
+
+type rawAllowedConsumer struct {
+	ServiceAccount string `yaml:"serviceAccount"`
+	Namespace      string `yaml:"namespace"`
 }
 
 type rawCredentials struct {
@@ -131,6 +137,12 @@ func toPostgres(rc rawComponent) (domain.Postgres, []error) {
 				pg.Guarantees.RPO = &domain.RPOGuarantee{Target: d}
 			}
 		}
+	}
+	for _, rac := range rc.AllowedConsumers {
+		pg.AllowedConsumers = append(pg.AllowedConsumers, domain.AllowedConsumer{
+			ServiceAccount: rac.ServiceAccount,
+			Namespace:      rac.Namespace,
+		})
 	}
 	return pg, errs
 }

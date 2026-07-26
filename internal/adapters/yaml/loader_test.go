@@ -23,6 +23,8 @@ components:
     guarantees:
       mtls: {}
       rpo: 1h
+    allowedConsumers:
+      - serviceAccount: probe-client
 `
 
 func TestLoadValidDocument(t *testing.T) {
@@ -48,6 +50,9 @@ func TestLoadValidDocument(t *testing.T) {
 	}
 	if pg.Credentials.Name != "orders-db-app" {
 		t.Errorf("credentials name = %q, want orders-db-app", pg.Credentials.Name)
+	}
+	if len(pg.AllowedConsumers) != 1 || pg.AllowedConsumers[0].ServiceAccount != "probe-client" {
+		t.Errorf("allowedConsumers = %+v, want one consumer probe-client", pg.AllowedConsumers)
 	}
 	if errs := stack.Validate(); len(errs) != 0 {
 		t.Errorf("expected the loaded stack to validate cleanly, got %v", errs)

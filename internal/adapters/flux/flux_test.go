@@ -25,6 +25,9 @@ func exampleStack() domain.Stack {
 					MTLS: &domain.MTLSGuarantee{},
 					RPO:  &domain.RPOGuarantee{Target: time.Hour},
 				},
+				AllowedConsumers: []domain.AllowedConsumer{
+					{ServiceAccount: "probe-client"},
+				},
 			},
 		},
 	}
@@ -78,6 +81,32 @@ func TestEmitDeterministic(t *testing.T) {
 		}
 		if !bytes.Equal(want, got) {
 			t.Errorf("file %s is not byte-identical across compiles", path)
+		}
+	}
+}
+
+// TestEmitWithoutMTLSGuaranteeEmitsNoZeroTrustObjects proves presence is
+// the only signal (golden rule 50): a component that doesn't declare
+// the mtls guarantee gets no PeerAuthentication or AuthorizationPolicy
+// at all, rather than a permissive or disabled variant of either.
+func TestEmitWithoutMTLSGuaranteeEmitsNoZeroTrustObjects(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for path := range manifests.Files {
+		if filepath.Base(path) == "peerauthentication.yaml" || filepath.Base(path) == "orders-db-authorizationpolicy.yaml" {
+			t.Errorf("emitted %s without a declared mtls guarantee", path)
 		}
 	}
 }
