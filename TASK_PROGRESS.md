@@ -182,6 +182,17 @@ Execution: implementer slice dispatched for the fail-closed change + README
 correction; `.claude/agents/implementer.md` added (the steward protocol's implementer
 tier had no definition — process gap found and closed this session).
 
+**Slice COMPLETE (2026-07-26):** `0333800` (rpo fails closed in the domain layer,
+aggregating with other errors; gated emitter/probe machinery kept unit-tested;
+example + goldens regenerated; harness probe retargeted; README narrowed) +
+`9c8e5f4` (review follow-up: the rpo refusal's aggregation with other validation
+errors pinned by a dedicated test — the one contract-review finding). Verified:
+fast tier green, and the full acceptance harness re-run green through the flake
+(compile, determinism, any-rpo refusal, cluster healthy, positive mTLS probe,
+off-mesh refusal, clean teardown). Both review findings from the first steward
+pass are now closed; the Flux-reconciliation harness wiring is scheduled week-two
+work per the owner decision.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: team name + developer-customer count — record (privately if repo goes
