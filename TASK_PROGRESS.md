@@ -374,6 +374,25 @@ compile) and slice 5 (quick-start) in parallel on disjoint surfaces. Teammate
 cold run (dogfood note 3) scheduled mid-week once quick-start lands — owner
 picks the developer. Kill review 2026-08-23.
 
+## Week-three slices 1+2+5 status (2026-07-26)
+
+- **Slice 5 (quick-start) ACCEPTED**: `97c026d` + review fix `cc025d9`. `nix
+  develop` provides a built `d7s`; QUICKSTART verified command-by-command (the
+  implementer ran a full live acceptance to earn its claims); new CI quickstart
+  job exercises the flake-built binary. One review finding (internal rule numbers
+  leaking into an external doc) fixed. **Teammate cold run is unblocked.**
+- **Slices 1+2 (external + durability CONDITIONAL) landed** as `caf04c5` — by a
+  second implementer finishing the first's cancelled-but-sound partial work
+  (owner stopped the original agent; fresh agent reviewed every hunk, kept the
+  design, added the unwired CLI summary, rewrote stale tests, added the missing
+  domain coverage). Schema change: `rpo` is now `{target, backupTo}`; refusals
+  re-shaped with remedies naming the `external` block. All four test tiers green;
+  contract review clean on code surfaces and notes the rule-9 watch item CLOSED
+  by the compiler-core comment/structure. Three findings in one fix round (in
+  progress): stale harness bad-rpo fixture (would fail CI on push — blocks
+  pushing until fixed), stale QUICKSTART rpo note, and comments claiming a
+  flux-level test that didn't exist.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
