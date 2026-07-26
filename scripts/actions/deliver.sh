@@ -1,9 +1,25 @@
 # deliver - register the git-source action's content with Flux (the
 # GitRepository CR the emitter's Kustomizations already name), apply only
-# the two emitted Flux Kustomization CRs, and drive the on-demand
-# reconcile sequencing down to a healthy Cluster: kustomize-controller /
-# helm-controller do the rest, never a direct apply of compiled objects
-# (docs/plans/01-week-one.md's Flux-reconciliation wiring).
+# the two emitted Flux Kustomization CRs, and let kustomize-controller /
+# helm-controller reconcile the rest down to a healthy Cluster - never a
+# direct apply of compiled objects (docs/plans/01-week-one.md's
+# Flux-reconciliation wiring).
+#
+# week-three plan, slice 4 (closing the week-two slice-4 live finding): the
+# emitted infra Kustomization now carries spec.healthChecks naming the CNPG
+# operator's HelmRelease (internal/adapters/flux/flux.go, emitCNPGOperator),
+# so its own Ready condition means the operator is genuinely serving, not
+# merely that its manifests applied. The app Kustomization's existing
+# dependsOn on the infra Kustomization (emitAppKustomization) therefore
+# gates on that real readiness by itself - Flux requires ALL of a
+# dependency's health checks to pass before a dependent applies. This
+# closes the gap: no more explicit operator/HelmRelease/Deployment wait,
+# no more forcing either Kustomization's reconcile on demand. What's left
+# below is a bounded wait on the app Kustomization's own outcome (it is
+# gated by the compiled dependsOn+healthChecks, not re-implemented here)
+# and, further down, the legitimate bounded wait on the Cluster's own
+# final healthy state (rule 44: waiting for an outcome is fine: re-doing
+# the ordering procedurally is not).
 require_repo_root
 
 log "flux: git push  # register the git source, named/namespaced for the emitter's sourceRef"
@@ -13,21 +29,13 @@ log "apply ONLY the emitted Flux Kustomization CRs - kustomize-controller/helm-c
 kubectl apply -f "$OUT/flux/infra-cnpg-operator.yaml"
 kubectl apply -f "$OUT/flux/apps-week-one.yaml"
 
-log "flux delivers infra layer: cnpg operator (namespace, HelmRepository, HelmRelease)"
-poll "Kustomization cnpg-operator reconciled by flux" bash -c \
-	"flux reconcile kustomization cnpg-operator -n flux-system --with-source >/dev/null 2>&1; \
-	 [ \"\$(kubectl get kustomization cnpg-operator -n flux-system -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)\" = 'True' ]"
-poll "CNPG operator HelmRelease ready" bash -c \
-	"[ \"\$(kubectl get helmrelease cnpg-operator -n cnpg-system -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)\" = 'True' ]"
-kubectl wait --for=condition=Available deployment -n cnpg-system --all --timeout="$TIMEOUT"
-
 log "flux delivers app layer: namespace, Cluster CR, zero-trust"
-echo "(the emitted Kustomization's dependsOn already waits on the infra layer;"
-echo " forced here now that CNPG's CRDs actually exist - rule 44: this poll is"
-echo " the wait, no fixed-duration sleep for that gap)"
-poll "Kustomization week-one reconciled by flux" bash -c \
-	"flux reconcile kustomization week-one -n flux-system --with-source >/dev/null 2>&1; \
-	 [ \"\$(kubectl get kustomization week-one -n flux-system -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)\" = 'True' ]"
+echo "(compiled ordering alone: the app Kustomization's dependsOn on"
+echo " cnpg-operator won't apply until cnpg-operator's own healthChecks -"
+echo " the operator's HelmRelease - report Ready, so this poll observes"
+echo " Flux's own reconciliation, it does not drive it)"
+poll "Kustomization week-one reconciled by flux (gated on cnpg-operator health via dependsOn+healthChecks)" bash -c \
+	"[ \"\$(kubectl get kustomization week-one -n flux-system -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)\" = 'True' ]"
 
 log "environment prerequisite: create the declared credentials secret"
 echo "(CNPG's bootstrap.initdb.secret only consumes a pre-existing secret - "

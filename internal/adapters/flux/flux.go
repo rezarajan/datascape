@@ -427,6 +427,31 @@ func emitCNPGOperator(files map[string][]byte, meshEnabled bool) error {
 			Path:      "./out/infra/cnpg-operator",
 			Prune:     true,
 			SourceRef: gitSourceRef,
+			// healthChecks names the operator's own HelmRelease, so this
+			// Kustomization's Ready condition means the CNPG operator is
+			// genuinely serving, not merely that its manifests applied
+			// (week-three plan, slice 4 — closing the week-two slice-4
+			// live finding). helm-controller's default
+			// install/upgrade.disableWait is false (verified against
+			// fluxcd.io/flux/components/helm/helmreleases/), so the
+			// HelmRelease's Ready condition already waits for the
+			// operator's Deployment to become Available — checking the
+			// HelmRelease alone (rather than hardcoding the chart's
+			// Deployment name, an internal detail of a chart this emitter
+			// doesn't own) is sufficient and the more robust target.
+			// The app-layer Kustomization's existing dependsOn on this
+			// Kustomization (emitAppKustomization) then needs no health
+			// check of its own to gate on operator readiness — Flux
+			// requires ALL of a dependency's health checks to pass before
+			// a dependent applies.
+			HealthChecks: []HealthCheck{
+				{
+					APIVersion: "helm.toolkit.fluxcd.io/v2",
+					Kind:       "HelmRelease",
+					Name:       cnpgHelmReleaseName,
+					Namespace:  cnpgSystemNamespace,
+				},
+			},
 		},
 	}
 	return set(files, "flux/infra-cnpg-operator.yaml", infra)
@@ -508,6 +533,20 @@ func emitDurability(files map[string][]byte, stackName string, pg domain.Postgre
 // "explicitly NOT this week"), so adding a dependsOn to a Kustomization
 // this compile never emits would be a dangling, hidden edge — exactly
 // what rule 24 warns against.
+//
+// Deliberately no spec.healthChecks here for the Cluster CR (week-three
+// plan, slice 4's judgment call): the finding this slice closes is that
+// dependsOn alone didn't gate app-layer ordering on the CNPG *operator's*
+// readiness (fixed above, on the infra Kustomization) — not that the
+// Cluster's own eventual health needed compiling into the ordering graph.
+// Waiting for the Cluster to reach its healthy phase is a legitimate
+// bounded wait on a final outcome (rule 44), which the acceptance harness
+// already does (scripts/actions/deliver.sh); folding it into this
+// Kustomization's own Ready condition would conflate that outcome-wait
+// with the ordering gate this slice's exit criterion is actually about,
+// and risks the Kustomization's own reconcile timing out on a Cluster
+// that can legitimately take longer than CNPG-operator startup to go
+// healthy (first WAL replay, backup wiring, etc.).
 func emitAppKustomization(files map[string][]byte, stackName string, dependsOnCNPGOperator bool) error {
 	spec := KustomizationSpec{
 		Interval:  reconcileInterval,

@@ -111,6 +111,26 @@ type DependsOn struct {
 	Namespace string `yaml:"namespace,omitempty"`
 }
 
+// HealthCheck is one entry of a Kustomization's spec.healthChecks: a
+// specific object whose readiness gates this Kustomization's own Ready
+// condition (kustomize-controller polls it via kstatus after applying).
+// week-three plan, slice 4 (closing the week-two slice-4 live finding
+// recorded in docs/plans/01-week-one.md's dated notes): naming the CNPG
+// operator's HelmRelease here is what makes a dependent Kustomization's
+// existing `dependsOn` gate on the operator's *actual* readiness, not
+// merely on this Kustomization's own apply having succeeded. Verified
+// against the upstream Flux 2.x docs (fluxcd.io/flux/components/kustomize/
+// kustomizations/), not memory: `.spec.healthChecks` accepts exactly this
+// {apiVersion, kind, name, namespace} shape, and "if `.spec.healthChecks`
+// is non-empty ... a Kustomization will be applied after all its
+// dependencies' health checks have passed."
+type HealthCheck struct {
+	APIVersion string `yaml:"apiVersion"`
+	Kind       string `yaml:"kind"`
+	Name       string `yaml:"name"`
+	Namespace  string `yaml:"namespace,omitempty"`
+}
+
 // Kustomization is a Flux kustomize.toolkit.fluxcd.io Kustomization: the
 // control object that tells Flux to reconcile a path. It is not the
 // plain kustomize.config.k8s.io Kustomization file.
@@ -123,11 +143,12 @@ type Kustomization struct {
 
 // KustomizationSpec is the subset of Kustomization.spec d7s emits.
 type KustomizationSpec struct {
-	Interval  string      `yaml:"interval"`
-	Path      string      `yaml:"path"`
-	Prune     bool        `yaml:"prune"`
-	SourceRef SourceRef   `yaml:"sourceRef"`
-	DependsOn []DependsOn `yaml:"dependsOn,omitempty"`
+	Interval     string        `yaml:"interval"`
+	Path         string        `yaml:"path"`
+	Prune        bool          `yaml:"prune"`
+	SourceRef    SourceRef     `yaml:"sourceRef"`
+	DependsOn    []DependsOn   `yaml:"dependsOn,omitempty"`
+	HealthChecks []HealthCheck `yaml:"healthChecks,omitempty"`
 }
 
 // CNPGCluster is a CloudNativePG postgresql.cnpg.io Cluster.
