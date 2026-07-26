@@ -48,7 +48,7 @@ dump_runner_diagnostics() {
 	done
 }
 
-if kubectl get terraform orders-db -n "$MANAGED_NAMESPACE" >/dev/null 2>&1; then
+if kubectl get terraform "$MANAGED_COMPONENT" -n "$MANAGED_NAMESPACE" >/dev/null 2>&1; then
 	# Branch on whether the CR ever actually planned/applied anything
 	# (found live, 2026-07-26: a CR Stalled before its first successful
 	# reconcile - status.observedGeneration stays -1, never advancing
@@ -60,30 +60,30 @@ if kubectl get terraform orders-db -n "$MANAGED_NAMESPACE" >/dev/null 2>&1; then
 	# safe only because nothing was ever created); a CR that DID plan/
 	# apply gets the full destroy path - the Neon-API check further down
 	# is the ground truth either way, not this branch's own guess.
-	observed_gen=$(kubectl get terraform orders-db -n "$MANAGED_NAMESPACE" -o jsonpath='{.status.observedGeneration}' 2>/dev/null || true)
+	observed_gen=$(kubectl get terraform "$MANAGED_COMPONENT" -n "$MANAGED_NAMESPACE" -o jsonpath='{.status.observedGeneration}' 2>/dev/null || true)
 	if [ "$observed_gen" = "-1" ] || [ -z "$observed_gen" ]; then
-		log "Terraform orders-db never reached a plan/apply (observedGeneration=$observed_gen) - nothing to destroy"
+		log "Terraform $MANAGED_COMPONENT never reached a plan/apply (observedGeneration=$observed_gen) - nothing to destroy"
 		echo "removing its finalizer directly is safe here: no Terraform state and no real Neon branch was ever created" >&2
-		kubectl patch terraform orders-db -n "$MANAGED_NAMESPACE" --type=merge -p '{"metadata":{"finalizers":[]}}' || true
-		kubectl delete terraform orders-db -n "$MANAGED_NAMESPACE" --ignore-not-found --wait=false
-		if ! poll "Terraform orders-db fully deleted (finalizer removed directly)" bash -c \
-			"! kubectl get terraform orders-db -n '$MANAGED_NAMESPACE' >/dev/null 2>&1"; then
-			echo "teardown warning: Terraform orders-db still present after its finalizer was removed - unexpected, investigate; the cluster is still torn down regardless" >&2
+		kubectl patch terraform "$MANAGED_COMPONENT" -n "$MANAGED_NAMESPACE" --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+		kubectl delete terraform "$MANAGED_COMPONENT" -n "$MANAGED_NAMESPACE" --ignore-not-found --wait=false
+		if ! poll "Terraform $MANAGED_COMPONENT fully deleted (finalizer removed directly)" bash -c \
+			"! kubectl get terraform '$MANAGED_COMPONENT' -n '$MANAGED_NAMESPACE' >/dev/null 2>&1"; then
+			echo "teardown warning: Terraform $MANAGED_COMPONENT still present after its finalizer was removed - unexpected, investigate; the cluster is still torn down regardless" >&2
 			status=1
 		fi
 	else
 		log "operator act: enable destroyResourcesOnDeletion on the Terraform CR before deleting it"
-		kubectl patch terraform orders-db -n "$MANAGED_NAMESPACE" --type=merge \
+		kubectl patch terraform "$MANAGED_COMPONENT" -n "$MANAGED_NAMESPACE" --type=merge \
 			-p '{"spec":{"destroyResourcesOnDeletion":true}}'
 
 		log "delete the Terraform CR - tofu-controller's finalizer runs a destroy plan first"
-		kubectl delete terraform orders-db -n "$MANAGED_NAMESPACE" --ignore-not-found --wait=false
+		kubectl delete terraform "$MANAGED_COMPONENT" -n "$MANAGED_NAMESPACE" --ignore-not-found --wait=false
 		if ! poll_n "$DESTROY_POLL_ATTEMPTS" "$POLL_INTERVAL" \
-			"Terraform orders-db fully deleted (destroy finalizer completed)" bash -c \
-			"! kubectl get terraform orders-db -n '$MANAGED_NAMESPACE' >/dev/null 2>&1"; then
+			"Terraform $MANAGED_COMPONENT fully deleted (destroy finalizer completed)" bash -c \
+			"! kubectl get terraform '$MANAGED_COMPONENT' -n '$MANAGED_NAMESPACE' >/dev/null 2>&1"; then
 			log "DIAGNOSTICS: destroy finalizer did not complete within DESTROY_POLL_ATTEMPTS - capturing state"
 			dump_runner_diagnostics
-			echo "teardown warning: Terraform orders-db's destroy finalizer did not complete in time - the Kubernetes object may be stuck; the Neon-API check below still runs to catch a real leaked branch, and the cluster is still torn down regardless (never before this point, so the finalizer always got its full budget first)" >&2
+			echo "teardown warning: Terraform $MANAGED_COMPONENT's destroy finalizer did not complete in time - the Kubernetes object may be stuck; the Neon-API check below still runs to catch a real leaked branch, and the cluster is still torn down regardless (never before this point, so the finalizer always got its full budget first)" >&2
 			status=1
 		fi
 	fi
@@ -103,9 +103,9 @@ if [ -n "${NEON_API_KEY:-}" ]; then
 			echo "teardown warning: could not list Neon branches for project $NEON_PROJECT_ID (API call failed) - cannot confirm no leak" >&2
 			status=1
 		else
-			remaining=$(printf '%s' "$branches_json" | jq -r '.branches[] | select(.name=="orders-db") | .id')
+			remaining=$(printf '%s' "$branches_json" | jq -r --arg name "$MANAGED_COMPONENT" '.branches[] | select(.name==$name) | .id')
 			if [ -n "$remaining" ]; then
-				echo "teardown defect: Neon branch 'orders-db' (id: $remaining) still exists in project $NEON_PROJECT_ID after teardown" >&2
+				echo "teardown defect: Neon branch '$MANAGED_COMPONENT' (id: $remaining) still exists in project $NEON_PROJECT_ID after teardown" >&2
 				echo "last-resort remediation: deleting it via the Neon API directly - self-cleaning, never self-absolving (this run still fails)" >&2
 				delete_http_code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
 					"https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$remaining" \
@@ -117,7 +117,7 @@ if [ -n "${NEON_API_KEY:-}" ]; then
 				fi
 				status=1
 			else
-				log "confirmed: no leaked Neon branch named orders-db remains in project $NEON_PROJECT_ID"
+				log "confirmed: no leaked Neon branch named $MANAGED_COMPONENT remains in project $NEON_PROJECT_ID"
 			fi
 		fi
 	else

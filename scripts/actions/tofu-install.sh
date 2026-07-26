@@ -90,8 +90,37 @@ fi
 # mechanism a runner pod itself uses, not a side-door import.
 TF_RUNNER_IMAGE="ghcr.io/flux-iac/tf-runner:$TOFU_CONTROLLER_VERSION"
 log "tofu-controller: warm the runner image ($TF_RUNNER_IMAGE) via a disposable pod"
-kubectl run tf-runner-warm -n flux-system --image="$TF_RUNNER_IMAGE" \
-	--restart=Never --command -- true
+# Full pod manifest (rather than `kubectl run ... --command`, which has no
+# flag surface for securityContext) so the warm-up pod itself satisfies the
+# Kubernetes `restricted` Pod Security Standard (dogfood note 2, finding 4:
+# flux-system already carries pod-security.kubernetes.io/warn=restricted -
+# flux's own install labels its namespace this way - so every pod created in
+# it is checked against `restricted`, cosmetic-only on a plain kind cluster
+# but a hard admission-time rejection on a restricted-enforcing one). The
+# pod's only job is to exec `true` and exit - it touches no filesystem path
+# that could care which non-root UID it runs as.
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tf-runner-warm
+  namespace: flux-system
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: tf-runner-warm
+      image: $TF_RUNNER_IMAGE
+      command: ["true"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+EOF
 poll "tf-runner-warm pod Succeeded (image pulled)" bash -c \
 	"[ \"\$(kubectl get pod tf-runner-warm -n flux-system -o jsonpath='{.status.phase}' 2>/dev/null)\" = 'Succeeded' ]"
 kubectl delete pod tf-runner-warm -n flux-system --ignore-not-found

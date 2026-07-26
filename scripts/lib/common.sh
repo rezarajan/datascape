@@ -27,7 +27,23 @@ export DESTROY_POLL_ATTEMPTS="${DESTROY_POLL_ATTEMPTS:-80}"
 export STACK="${STACK:-examples/week-one/stack.yaml}"
 export OUT="${OUT:-./out}"
 export GITSERVER_NS="${GITSERVER_NS:-d7s-harness-git}"
-export GITSERVER_IMAGE="${GITSERVER_IMAGE:-d7s-gitserver:harness}"
+# GITSERVER_IMAGE default carries $$ (this script's own PID), not a fixed
+# string (found live, week-three slice 6: two concurrent host runs -
+# `nix run .#acceptance` and `nix run .#acceptance-managed` - both build,
+# `kind load`, then `docker rmi` the SAME local tag `d7s-gitserver:harness`
+# in git-source.sh; racing that build/load/rmi cycle on one shared,
+# mutable tag let one run's `docker rmi` interfere with the other's still-
+# in-flight `kind load docker-image`, so the loaded image reached the node
+# but the gitserver process inside it never actually served git - Flux's
+# GitRepository sat un-Ready until the bounded wait timed out with no
+# other symptom). $$ isn't derived from $CLUSTER_NAME because the managed
+# orchestrator (acceptance-managed.sh) only reassigns CLUSTER_NAME AFTER
+# common.sh (and thus this default) has already run and exported - a
+# CLUSTER_NAME-keyed tag would silently keep resolving to the pre-
+# reassignment default for every managed run, never actually
+# differentiating concurrent ones. git-source.sh itself needs no change -
+# it already reads $GITSERVER_IMAGE rather than a literal.
+export GITSERVER_IMAGE="${GITSERVER_IMAGE:-d7s-gitserver:harness-$$}"
 
 # MinIO — the acceptance stack's declared `external` object store (week-
 # three plan, slice 3): stood up by the harness as environment
@@ -78,6 +94,24 @@ export MANAGED_CLUSTER_NAME="${MANAGED_CLUSTER_NAME:-d7s-acceptance-managed}"
 # own declared stack name compiles to (internal/adapters/flux/flux.go:
 # namespace and Kustomization are both named after Stack.Name).
 export MANAGED_NAMESPACE="${MANAGED_NAMESPACE:-week-one}"
+# MANAGED_COMPONENT / MANAGED_CREDENTIALS_SECRET (dogfood note 2, finding 1:
+# "the managed harness actions hardcode the example component name"). Same
+# mechanism as MANAGED_NAMESPACE right above — an overridable env var
+# defaulting from examples/week-two/managed-stack.yaml's own declared values
+# — rather than parsing the stack yaml at run time: the declaration is
+# already the harness's one source of truth for MANAGED_STACK/MANAGED_OUT/
+# MANAGED_NAMESPACE, so a fifth value following the same shape keeps every
+# unit a plain env-var read (simple, shellcheck-flat) instead of teaching
+# each one a yaml-parsing dependency for a value that's a one-line override
+# either way. MANAGED_COMPONENT is both the Terraform CR's name
+# (internal/adapters/flux/terraform.go: named after pg.Name) and the Neon
+# branch/role/database name (same field, templated as "{{.Name}}").
+# MANAGED_CREDENTIALS_SECRET is the component's declared
+# credentials.secretRef.name — the Secret tofu-controller's
+# writeOutputsToSecret populates and the probe reads from, independent of
+# the component name (the schema allows them to differ).
+export MANAGED_COMPONENT="${MANAGED_COMPONENT:-orders-db}"
+export MANAGED_CREDENTIALS_SECRET="${MANAGED_CREDENTIALS_SECRET:-orders-db-app}"
 # tofu-controller version pin (week-two plan slice 1's health verdict,
 # TASK_PROGRESS 2026-07-26: v0.16.4, OpenTofu-first, pinnable).
 export TOFU_CONTROLLER_VERSION="${TOFU_CONTROLLER_VERSION:-v0.16.4}"

@@ -1,0 +1,25 @@
+# harness-variant - week-three plan Revision 1, slice 6's demonstration
+# fixture: closes dogfood note 2 finding 1 ("the managed harness actions
+# hardcode the example component name") by proving the managed harness
+# (compile-managed/deliver-managed/probe-managed/teardown-managed/
+# acceptance-managed) runs end to end against a component name that is
+# NOT "orders-db" - the one baked into examples/week-two/managed-stack.yaml
+# and MANAGED_COMPONENT's default.
+#
+# Unlike dogfood/internal-api and dogfood/managed-api, this is a HARNESS
+# fixture, not a persisting dogfood stack: it is delivered onto its own
+# ephemeral kind cluster via `nix run .#acceptance-managed` with
+# MANAGED_STACK/MANAGED_NAMESPACE/MANAGED_COMPONENT/MANAGED_CREDENTIALS_SECRET
+# overridden to the values below, and torn down (including the real Neon
+# branch) by the same run - it does not persist, and does not touch either
+# real dogfood stack or their Neon branches.
+apiVersion: d7s.dev/v1alpha1
+kind: Stack
+name: harness-variant
+components:
+  - kind: postgres
+    name: widgets-db
+    placement: managed
+    credentials:
+      secretRef:
+        name: widgets-db-app

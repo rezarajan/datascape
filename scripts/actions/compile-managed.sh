@@ -7,7 +7,7 @@
 # rather than the self-hosted scenario's default (its Cluster CR).
 require_repo_root
 
-EXPECT_FILE="$MANAGED_OUT/apps/$MANAGED_NAMESPACE/orders-db-terraform.yaml" \
+EXPECT_FILE="$MANAGED_OUT/apps/$MANAGED_NAMESPACE/$MANAGED_COMPONENT-terraform.yaml" \
 	STACK="$MANAGED_STACK" \
 	OUT="$MANAGED_OUT" \
 	compile-and-verify

@@ -23,7 +23,7 @@ spec:
       command: ["sleep", "3600"]
       envFrom:
         - secretRef:
-            name: orders-db-app
+            name: $MANAGED_CREDENTIALS_SECRET
 EOF
 kubectl wait --for=condition=Ready pod/managed-probe-client -n "$MANAGED_NAMESPACE" --timeout="$TIMEOUT"
 # shellcheck disable=SC2016

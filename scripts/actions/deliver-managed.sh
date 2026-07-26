@@ -27,15 +27,15 @@ echo " already exists, created by flux reconciling the Kustomization)"
 neon-secret
 
 log "wait: Terraform CR reaches Ready (tofu-controller reconciled the OpenTofu config)"
-if ! poll "Terraform orders-db Ready" bash -c \
-	"[ \"\$(kubectl get terraform orders-db -n $MANAGED_NAMESPACE -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)\" = 'True' ]"; then
+if ! poll "Terraform $MANAGED_COMPONENT Ready" bash -c \
+	"[ \"\$(kubectl get terraform $MANAGED_COMPONENT -n $MANAGED_NAMESPACE -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null)\" = 'True' ]"; then
 	# A bounded wait that times out silently is undiagnosable by design
 	# (found live, 2026-07-26) - capture everything teardown is about to
 	# make unrecoverable, BEFORE failing this action and letting the
 	# orchestrator's EXIT trap tear the cluster down.
-	log "DIAGNOSTICS: Terraform orders-db did not reach Ready - capturing state before teardown"
-	echo "--- kubectl describe terraform orders-db -n $MANAGED_NAMESPACE ---"
-	kubectl describe terraform orders-db -n "$MANAGED_NAMESPACE" || true
+	log "DIAGNOSTICS: Terraform $MANAGED_COMPONENT did not reach Ready - capturing state before teardown"
+	echo "--- kubectl describe terraform $MANAGED_COMPONENT -n $MANAGED_NAMESPACE ---"
+	kubectl describe terraform "$MANAGED_COMPONENT" -n "$MANAGED_NAMESPACE" || true
 	echo "--- kubectl get pods -n $MANAGED_NAMESPACE -o wide ---"
 	kubectl get pods -n "$MANAGED_NAMESPACE" -o wide || true
 	for pod in $(kubectl get pods -n "$MANAGED_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do

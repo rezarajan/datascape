@@ -98,6 +98,21 @@ Two ways to see the compiled output actually running, on a throwaway
   `.#istio-install`, `.#git-source`, `.#deliver`, `.#guard`, `.#probes`,
   `.#teardown`. See `scripts/actions/` for what each one does.
 
+### The managed scenario (`placement: managed`)
+
+The same shape, delivered to a real Neon database instead of CNPG: `nix run
+.#acceptance-managed` runs it end to end (its own throwaway kind cluster, so it
+never collides with the self-hosted one above), or piecemeal: `.#compile-managed`,
+`.#cluster-up`, `.#flux-install`, `.#tofu-install`, `.#git-source`,
+`.#deliver-managed`, `.#probe-managed`, `.#teardown-managed`. `deliver-managed`
+registers the `GitRepository` for you — but that's the same one-per-cluster
+registration the self-hosted flow needs (see the prerequisite below); if you're
+driving the managed scenario by hand instead of through these actions, you still
+need it registered, pointing at wherever you pushed the compiled `out/`, before
+Flux can reconcile the Terraform CR at all. The component name and the
+credentials Secret name both come from your own declaration, not a hardcoded
+default — nothing in this scenario assumes a specific stack.
+
 ### Environment prerequisites (not compiled by d7s — you provide these)
 
 - **Flux** installed on the target cluster (`nix run .#flux-install`, or your own).
@@ -118,8 +133,13 @@ Two ways to see the compiled output actually running, on a throwaway
 
 - **`placement: managed`** compiles to Neon via tofu-controller and needs a real
   `NEON_API_KEY` (env var or a gitignored `./.env`) to deliver — there's no
-  managed-placement path without one. `NEON_PROJECT_ID` is auto-discovered from the
-  key, or set it yourself to override.
+  managed-placement path without one. It also needs to know which Neon project
+  that key is scoped to: by default this is auto-discovered for you (Neon's API
+  doesn't expose a direct "whose key is this" lookup, so the harness infers it
+  from a deliberate, harmless API call), which costs one extra network round
+  trip and assumes the key is scoped to exactly one project. Set `NEON_PROJECT_ID`
+  yourself — env var or `./.env`, same as the API key — to skip discovery
+  entirely or to pick a specific project when that assumption doesn't hold.
 - **`guarantees.rpo` compiles once it names a destination.** Declare an `external`
   object store (v1's only shape: an S3-compatible endpoint/bucket, credentials as a
   Secret reference — never inline) and point `guarantees.rpo.backupTo` at its name:
