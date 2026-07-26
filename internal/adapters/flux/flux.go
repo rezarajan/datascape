@@ -90,13 +90,50 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 		return ports.Manifests{}, errors.Join(errs...)
 	}
 
+	meshEnabled := false
+	for _, pg := range pgs {
+		if pg.Guarantees.MTLS != nil {
+			meshEnabled = true
+		}
+	}
+
 	files := map[string][]byte{}
+	if err := emitAppNamespace(files, stack.Name, meshEnabled); err != nil {
+		return ports.Manifests{}, err
+	}
 	for _, pg := range pgs {
 		if err := emitPostgres(files, stack.Name, pg); err != nil {
 			return ports.Manifests{}, err
 		}
 	}
+	if len(pgs) > 0 {
+		if err := emitAppKustomization(files, stack.Name); err != nil {
+			return ports.Manifests{}, err
+		}
+	}
 	return ports.Manifests{Files: files}, nil
+}
+
+// emitAppNamespace emits the stack's application namespace once.
+// meshEnabled adds the Istio ambient dataplane label: without it,
+// ztunnel never intercepts the namespace's traffic and a declared mtls
+// guarantee would compile PeerAuthentication/AuthorizationPolicy objects
+// that exist but are never enforced (found by running the acceptance
+// harness against a live ambient mesh, not assumed — golden rule 40).
+func emitAppNamespace(files map[string][]byte, stackName string, meshEnabled bool) error {
+	labels := ownershipLabels(stackName, "")
+	if meshEnabled {
+		labels["istio.io/dataplane-mode"] = "ambient"
+	}
+	ns := Namespace{
+		APIVersion: "v1",
+		Kind:       "Namespace",
+		Metadata: ObjectMeta{
+			Name:   stackName,
+			Labels: labels,
+		},
+	}
+	return set(files, fmt.Sprintf("apps/%s/namespace.yaml", stackName), ns)
 }
 
 // checkRPOSatisfiable is the durability guarantee's compile-time check
@@ -128,10 +165,7 @@ func emitPostgres(files map[string][]byte, stackName string, pg domain.Postgres)
 	if err := emitZeroTrust(files, stackName, pg); err != nil {
 		return err
 	}
-	if err := emitDurability(files, stackName, pg); err != nil {
-		return err
-	}
-	return emitAppKustomization(files, stackName)
+	return emitDurability(files, stackName, pg)
 }
 
 // emitZeroTrust compiles the transport-security guarantee triple's
@@ -287,18 +321,6 @@ func emitCNPGOperator(files map[string][]byte) error {
 }
 
 func emitCluster(files map[string][]byte, stackName string, pg domain.Postgres) error {
-	appNS := Namespace{
-		APIVersion: "v1",
-		Kind:       "Namespace",
-		Metadata: ObjectMeta{
-			Name:   stackName,
-			Labels: ownershipLabels(stackName, ""),
-		},
-	}
-	if err := set(files, fmt.Sprintf("apps/%s/namespace.yaml", stackName), appNS); err != nil {
-		return err
-	}
-
 	cluster := CNPGCluster{
 		APIVersion: "postgresql.cnpg.io/v1",
 		Kind:       "Cluster",

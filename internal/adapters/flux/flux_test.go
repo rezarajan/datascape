@@ -110,6 +110,24 @@ func TestEmitWithoutMTLSGuaranteeEmitsNoZeroTrustObjects(t *testing.T) {
 			t.Errorf("emitted %s without a declared mtls guarantee", path)
 		}
 	}
+	if bytes.Contains(manifests.Files["apps/week-one/namespace.yaml"], []byte("dataplane-mode")) {
+		t.Error("namespace carries the ambient dataplane label without a declared mtls guarantee")
+	}
+}
+
+// TestEmitMTLSGuaranteeLabelsNamespaceAmbient proves the namespace joins
+// the Istio ambient mesh when mtls is declared: without this label,
+// ztunnel never intercepts the namespace's traffic and PeerAuthentication/
+// AuthorizationPolicy would exist but never be enforced (found by running
+// the acceptance harness against a live ambient mesh — golden rule 40).
+func TestEmitMTLSGuaranteeLabelsNamespaceAmbient(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	if !bytes.Contains(manifests.Files["apps/week-one/namespace.yaml"], []byte("istio.io/dataplane-mode: ambient")) {
+		t.Error("namespace does not carry the ambient dataplane label despite a declared mtls guarantee")
+	}
 }
 
 // TestEmitWithoutRPOGuaranteeEmitsNoBackupObjects mirrors the mTLS case
