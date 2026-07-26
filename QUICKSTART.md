@@ -2,7 +2,7 @@
 
 For a developer with [Nix](https://nixos.org/download) and
 [Docker](https://docs.docker.com/get-docker/) already installed. Every command
-below was actually run to write this doc (rule 41) — nothing here is aspirational.
+below was actually run to write this doc — nothing here is aspirational.
 
 ## 1. Clone and enter the dev shell
 
@@ -42,7 +42,7 @@ components:
     placement: self-hosted        # or "managed" — see the scope note below
     credentials:
       secretRef:
-        name: orders-db-app       # a Kubernetes Secret name — never a value (rule 51)
+        name: orders-db-app       # a Kubernetes Secret name — d7s never accepts secret values
     guarantees:
       mtls: {}                    # turns on mesh mTLS; once declared it can't be turned off
     allowedConsumers:

@@ -16,3 +16,4 @@
 
 # Keep env out of git
 .env
+result
