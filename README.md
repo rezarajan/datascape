@@ -15,7 +15,7 @@ This repository restarts the quest with the order of operations corrected:
 New here? See [QUICKSTART.md](QUICKSTART.md) — clone, `nix develop` (the compiled
 binary is ready on `PATH`), declare a stack, compile, deliver.
 
-## Current phase: week-one artifact — building
+## Current phase: dogfood — week three building
 
 The problem definition was **signed off 2026-07-25, amended the same day, and
 re-signed-off 2026-07-26**: **d7s is a compiler for data platforms.** Declare
@@ -28,13 +28,17 @@ is dbt/Terraform-class convenience-to-production-grade for data platforms at any
 the v1 beachhead is one real platform team (see
 `docs/discovery/00-problem-definition.md`).
 
-The week-one plan (`docs/plans/01-week-one.md`, Revision A) is approved and built: a
-`d7s compile` CLI compiling a Postgres declaration to Flux/CloudNativePG manifests,
-with one guarantee triple proven end-to-end on a live kind cluster (mesh mTLS +
-default-deny authorization). The durability/RPO guarantee ships no live triple this
-week: v1 has no declarable backup destination, so `guarantees.rpo` fails compilation
-closed on every placement — a declarable destination is planned for the week-two+
-skeleton (owner decision, week-one plan "Owner decisions — 2026-07-26"). Try it:
+Weeks one and two are built and live-verified (`docs/plans/01-week-one.md`,
+`02-week-two.md`): a `d7s compile` CLI compiling a Postgres declaration to
+Flux-consumable artifacts on both sides of the placement seam — CloudNativePG on
+Kubernetes, or a real Neon database via a tofu-controller `Terraform` CR — with the
+transport-security triple (mesh mTLS + default-deny authorization) proven end to end
+and the seam's refusals (`mtls`/`allowedConsumers`/`rpo` on managed placement) fail-
+closed with remedies. Week three (`03-week-three.md`, in flight) completes the
+durability triple: an `external` object-store declaration lets `guarantees.rpo`
+compile — labeled CONDITIONAL, per the trust-boundary contract — and the acceptance
+harness watches a real backup complete. Two dogfood stacks run (`docs/dogfood.md`);
+kill review 2026-08-23. Try it (or see `QUICKSTART.md` for the dev-shell path):
 
 ```
 go build -o d7s ./cmd/d7s
@@ -55,7 +59,7 @@ nix run .#acceptance           # the same scenario, live, on a throwaway kind cl
 | `docs/foundations/lessons-from-platformctl.md` | The post-mortem record: what failed, why, and the evidence. Append-only. |
 | `docs/foundations/agentic-development.md` | The development-process semantics (Claude/agent workflow patterns) proven in platformctl, adapted for this repo. |
 | `docs/discovery/00-problem-definition.md` | The discovery questionnaire, answered and **SIGNED OFF 2026-07-25, re-signed-off 2026-07-26** — the scope contract for solution work. |
-| `docs/plans/01-week-one.md` | The week-one build plan, Revision A — approved and built. |
+| `docs/plans/` | The dated build plans: week one (built), week two (built — the managed seam), week three (in flight — durability whole + first human operator). |
 | `docs/README.md` | The docs map — classifies every document as contract, plan, or record. |
 | `cmd/d7s`, `internal/` | The compiler: hexagonal layout (domain / ports / compiler core / adapters), arch-tested. |
 | `examples/week-one/stack.yaml` | The acceptance-scenario declaration — also the docs example and the e2e test input. |
