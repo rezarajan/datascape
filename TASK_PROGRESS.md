@@ -424,6 +424,19 @@ the template. Owner items: **push** (20 commits), thank the developer.
 Kill review 2026-08-23: two real stacks, three dogfood notes, both guarantee
 families live (one CONDITIONAL per contract), both placements proven.
 
+## Note-3 fix rounds fully closed (2026-07-26)
+
+The cold-run session's second finding (deliver silently waiting on an absent git
+source) fixed in `0aed269`: gitserver prerequisite guard in both deliver actions,
+and every bounded wait in the harness now announces itself at start. Review pass
+on both fix commits: clean except one rule-39 finding (live-caught fixes without
+an automated repro) — closed by `319ef67`: a cluster-free stub-kubectl
+conformance test pinning all four prerequisite refusals (remedy strings included)
+and the wait announcement, fail-then-pass proven by independently breaking both
+code paths, wired into scripts/check.sh so CI's fast tier guards them. Week
+three stands fully closed: six of six exit criteria, all findings fixed or
+named. Owner: push (4 local commits).
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
