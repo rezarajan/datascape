@@ -1,7 +1,8 @@
 # Week-three plan — the durability triple made whole, and the first human operator
 
-**Class: Plan.** **Status: DRAFT (Revision 0), 2026-07-26 — awaiting owner approval.
-No product code lands from this plan until approved (phase gate).**
+**Class: Plan.** **Status: APPROVED as Revision 1 — 2026-07-26, by the owner.
+Product code authorized, scoped to this revision. Approval-round answers recorded
+at the end of this document.**
 
 Two inputs, both dated 2026-07-26: the steward's ranked proposal after week two
 (complete the durability triple; fold in the two evidence-backed debt items), and the
@@ -99,3 +100,22 @@ component kind or second GitOps target; restore operation (day-2, refused).
   a whole new component kind — skeleton scope pulled forward).
 - **Teammate + timing**: who runs the cold QUICKSTART, and when in the week —
   early enough that their friction can land as fixes before the kill review.
+
+---
+
+## Approval round — 2026-07-26 (answers verbatim → Revision 1)
+
+- **Approval:** "Approve as drafted (Recommended)".
+- **Store shape:** **"Both, external first"** — the external/CONDITIONAL path ships
+  this week; the owner's intent that object storage ALSO becomes a d7s-compiled
+  component is recorded explicitly, with its existing home in skeleton scope
+  (Q3.1) — not this week's work, and now not merely deferred but owner-affirmed.
+- **Teammate run:** "Mid-week, once quick-start lands (Recommended)" — slice 5
+  executes in parallel with slices 1–2 so the cold run can start mid-week; the
+  owner picks the developer.
+
+**Execution note (build order):** slices 1+2 are one implementer slice (the
+declaration alone emits nothing — the triple that consumes it is its only
+observable behavior); slice 5 runs in parallel on a disjoint surface (flake +
+QUICKSTART vs compiler internals); slices 3, 4, and 6 follow serially on the
+harness surface.
