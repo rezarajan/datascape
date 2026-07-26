@@ -215,6 +215,33 @@ until approved. Key plan shape: mtls+managed refuses (mesh guarantee doesn't cro
 the seam), rpo still refuses everywhere, Flux-path harness wiring un-narrows the
 week-one claims, Neon teardown verified in the harness.
 
+## Week-two slice 1 (feasibility spike) — findings, 2026-07-26
+
+Research verified against upstream sources (releases, source code) — dated facts:
+
+- **tofu-controller (flux-iac):** revived and active — v0.16.4 (2026-06-08), monthly
+  releases since v0.16.0 (2026-01-27), issue backlog shrinking; BUT OpenTofu-first
+  since v0.16.0 (breaking; OpenTofu bundled by default), community-maintained with a
+  prior ~2.5-year stable-release drought (v0.15.1 Jul 2023 → v0.16.0 Jan 2026), and
+  no documented compatibility matrix against current Flux 2.9. **Health verdict:
+  pinnable at an exact tag as a moderate-risk environment prerequisite.**
+- **Local Neon:** the official "Neon Local" docker image is a proxy to the paid
+  cloud (requires NEON_API_KEY + project id — no account, no function). The genuine
+  no-account path is the open-source repo's control_plane crate (`cargo neon`:
+  tenants/timelines/endpoints) or its docker-compose storage stack — neither exposes
+  an HTTP control-plane API shaped like the cloud's `console.neon.tech/api/v2`.
+- **Neon Terraform providers:** community-only (kislerdm/neon ~584k downloads;
+  terraform-community-providers/neon), and both **hard-code
+  `console.neon.tech`** with no endpoint override (confirmed in provider/SDK
+  source; the SDK's `baseURL` is a constant, the community provider sets
+  `req.URL.Host` unconditionally).
+- **Consequence:** "simulate anything else required" (owner directive, Revision 1)
+  means building a fake Neon REST control plane implementing the project/branch/
+  database/role/endpoint CRUD surface PLUS DNS+TLS interception inside runner pods,
+  or forking/vendoring the provider SDK. Nontrivial standing machinery that proves
+  the provider can talk to a fake — a deviation-scale finding per §5, stopped and
+  reported to the owner rather than built silently.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
