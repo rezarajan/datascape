@@ -60,8 +60,9 @@ Run before any product change; subagent prompts point here too.
   flagged as findings, not reconciled silently.
 - Order of work: owner re-signed Amendment 1 + Amendment 2 and approved week-one plan
   Revision A (2026-07-26) → build week-one artifact (compiler + Postgres via CNPG +
-  two guarantee triples: mTLS and RPO-backed durability, compiled to Flux manifests;
-  `placement: managed` fails closed) → week two proves the seam pair's managed side →
+  the mTLS guarantee triple, compiled to Flux manifests; `placement: managed` AND
+  `guarantees.rpo` both fail closed — owner decisions 2026-07-26, recorded in the
+  week-one plan) → week two proves the seam pair's managed side →
   build out the skeleton. Kill review at 4 weeks / 2+ real stacks from the first
   dogfood week.
 - Open item from sign-off: the team name/denominator (Q1.1a) — owner records it before

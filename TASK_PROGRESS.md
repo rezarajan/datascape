@@ -166,6 +166,22 @@ The full harness was then re-run through the flake: **all seven checks pass**
 probe, off-mesh refusal, durability probe firing) with clean teardown. CI-side run
 still unverified until the owner pushes.
 
+## Owner decisions: rpo fails closed; Flux-path claim narrowed (2026-07-26)
+
+Steward decision round on the two review findings (options + verbatim selections
+recorded in `docs/plans/01-week-one.md`, "Owner decisions — 2026-07-26"):
+
+1. **Durability:** `guarantees.rpo` fails compilation closed in v1 (no backup
+   destination is declarable, so the triple's probe leg could never pass — problem
+   definition line 408–411). Emitter/probe/satisfiability check stay gated in the
+   tree. Week one ships one live triple (mTLS).
+2. **Acceptance claim:** narrowed now (plan + README); wiring Flux to reconcile the
+   emitted Kustomizations from a real git source is scheduled week-two work.
+
+Execution: implementer slice dispatched for the fail-closed change + README
+correction; `.claude/agents/implementer.md` added (the steward protocol's implementer
+tier had no definition — process gap found and closed this session).
+
 ## Open items owned by the owner
 
 - **Q1.1a**: team name + developer-customer count — record (privately if repo goes

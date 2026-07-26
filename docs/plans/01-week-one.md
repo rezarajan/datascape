@@ -168,3 +168,49 @@ week one must prove it.
    objects to tf-controller operationally. **DEFERRED 2026-07-26 — the owner declined
    to decide at Revision A approval; this blocks week two only, not the week-one build,
    per the owner's own framing above.**
+
+---
+
+## Owner decisions — 2026-07-26 (steward decision round, post-review findings)
+
+The first steward review pass (recorded in `TASK_PROGRESS.md`, 2026-07-26) found two
+places where the artifact's claims outran the contract. Both were put to the owner as
+an option round; the selected options are recorded verbatim, then synthesized.
+
+**Q1 — "How should the durability (RPO) guarantee be remedied to satisfy the
+contract's 'ships as a triple or not at all' rule?"** Owner selected: **"Fail closed
+on rpo (Recommended)"**, whose full option text read: *"`rpo:` refuses to compile in
+v1 with the remedy in the error (\"no backup destination declarable yet — planned\").
+Emitter, probe, and unsatisfiable-RPO check stay in the tree, gated. Contract-literal
+(line 410, rule 34); no amendment needed; plan gets a dated additive correction.
+Cost: week one ships one live guarantee triple (mTLS), not two."*
+
+**Q2 — "How should the overstated acceptance claim (Flux never reconciles the emitted
+Kustomizations; the harness applies out/ directly) be handled?"** Owner selected:
+**"Narrow claim now, wire in week 2 (Recommended)"**, whose full option text read:
+*"Dated additive note in the plan + README correction: \"compile + direct-apply
+verified live; Flux reconciliation of emitted Kustomizations not yet exercised.\"
+Wiring a real git source into the harness becomes a scheduled week-two item, where
+the delivery plane matters for the managed seam anyway. Unblocks dogfood
+immediately."*
+
+**Synthesis (supersedes the marked items above; earlier text kept, not erased):**
+
+- Revision A item 1's durability triple **does not ship in week one's output**.
+  Declaring `guarantees.rpo` now fails compilation closed with the remedy in the
+  error, exactly like `placement: managed` (rules 34/35; problem definition line
+  408–411). The ScheduledBackup emitter, the durability probe, and the
+  RPO-satisfiability check remain in the tree, gated and unit-tested, for the week
+  when a backup destination becomes declarable.
+- Revision A item 4's exit criterion **"both guarantee triples demonstrated" is
+  corrected to: one triple (transport security) demonstrated live in full**; the
+  durability family's demonstrated behavior is its compile-time refusal (which now
+  covers every `rpo` declaration, not only unsatisfiable targets). The prior checkbox
+  text stands as written for what was actually run on 2026-07-26; this note narrows
+  what it certifies.
+- Exit criterion 1 ("acceptance scenario passes... invoked as documented") is
+  **narrowed**: verified live are the documented `d7s compile` invocation, direct
+  application of `out/`, the mTLS probes, and CNPG health; **Flux reconciliation of
+  the emitted Kustomization objects has not been exercised** (the harness applies
+  `out/` directly and says so). Wiring a real git source through Flux is a scheduled
+  week-two item alongside the managed-seam work.
