@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -89,6 +90,29 @@ func TestPostgresValidateWithoutRPOCompiles(t *testing.T) {
 	p := validPostgres()
 	if errs := p.Validate(); len(errs) != 0 {
 		t.Fatalf("expected no errors without guarantees.rpo, got %v", errs)
+	}
+}
+
+// TestPostgresValidateRPORefusalAggregatesWithOtherErrors pins the
+// owner decision's "aggregates with other validation errors" claim
+// (rules 33, 39) for guarantees.rpo specifically: a declaration with
+// both an unknown placement and a declared rpo must report both
+// problems together in one Validate() call, not just the rpo refusal
+// alone or the placement error alone.
+func TestPostgresValidateRPORefusalAggregatesWithOtherErrors(t *testing.T) {
+	p := validPostgres()
+	p.Placement = "on-prem"
+	p.Guarantees.RPO = &domain.RPOGuarantee{Target: time.Hour}
+	errs := p.Validate()
+	if len(errs) != 2 {
+		t.Fatalf("expected exactly 2 aggregated errors, got %v", errs)
+	}
+	joined := errors.Join(errs...).Error()
+	if !strings.Contains(joined, "unknown placement") {
+		t.Errorf("aggregated errors %v do not include the unknown-placement error", errs)
+	}
+	if !strings.Contains(joined, "conformance probe could never pass") {
+		t.Errorf("aggregated errors %v do not include the rpo refusal", errs)
 	}
 }
 
