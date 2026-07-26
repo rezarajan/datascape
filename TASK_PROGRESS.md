@@ -298,6 +298,22 @@ seven compiled objects (both zero-trust objects included), healthChecks gap
 disclosed with a dated line in the week-one plan; full harness re-run PASSED with
 the extended guard (verified from the run log), fast tier green.
 
+## Week-two slice 6 (nixified harness) — ACCEPTED (2026-07-26)
+
+Commit `34fa275`: the monolith `scripts/acceptance-kind.sh` is deleted, replaced by
+ten single-purpose flake actions (`scripts/actions/*.sh` + shared
+`scripts/lib/common.sh`, one bounded-poll definition) built with
+`writeShellApplication` — shellcheck + pinned runtimeInputs per unit — composed by
+`nix run .#acceptance`; CI and README point at the same entry point. Verified live:
+full scenario passed via the new entry point (compile, determinism, any-rpo
+refusal, git-source, Flux-only delivery, seven-object guard, both probes, clean
+teardown), `nix flake check` green, fast tier green. Shellcheck immediately caught
+one real pre-existing bug in carried-over guard code (unquoted jsonpath). Contract
+review: NO findings — behavior parity confirmed check-by-check against the deleted
+monolith. Remaining week-two work: slice 5 (managed/Neon acceptance + credentials
+wiring via writeOutputsToSecret or explicit re-deferral + API-key process + CI
+managed-tier gating) — blocked on the owner's NEON_API_KEY.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
