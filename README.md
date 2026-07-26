@@ -67,9 +67,10 @@ nix run .#acceptance           # the same scenario, live, on a throwaway kind cl
 
 ## The one rule of this phase
 
-> Product code is authorized, scoped exactly to the week-one plan's (Revision A) build
-> order and exit criteria. Scope beyond the signed-off problem definition, or beyond
-> Revision A's slice, reopens that contract via a dated amendment first.
+> Product code is authorized, scoped exactly to the currently approved plan revision's
+> build order and exit criteria (see `docs/README.md` for which plan that is). Scope
+> beyond the signed-off problem definition, or beyond the approved slice, reopens the
+> contract via a dated amendment first.
 
 platformctl's post-mortem shows what happens otherwise: ~20 provider types, 10 resource
 kinds, ~35 feature gates, and three successive "path to production" plans layered on a
