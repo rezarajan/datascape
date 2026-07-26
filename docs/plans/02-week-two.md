@@ -166,3 +166,44 @@ amendments:
   inconsistent fail-open state between commits; the `mtls`+`managed` refusal must
   land in the same commit that opens the managed path (rules 34/37/50). Recorded
   here as a deliberate build-order adjustment, not a silent one.
+
+## Owner directives — 2026-07-26, mid-slice-4 (→ Revision 3)
+
+Recorded verbatim: *"While that works, two things I want to do to clean up - for
+the API key create a process for a developer to safely include that in the test;
+this obviously cannot be commited to version control. Ensure as well rational
+decisions for CI - you cannot expect a cluster to always be available for CI - a
+consequence of the decision to really test on an external service. Second, the
+script is becoming very cumbersome. Remember, while agents can easily parse those
+scripts it is not easy for a human to do so. I would prefer a fully nixified setup
+for all actions; this not only makes things easier to modularize, but genuinely
+makes testing deterministic."*
+
+**Synthesis (Revision 3 — two additions, executed in this order after slice 4
+clears review; slice numbering continues):**
+
+- **Slice 6 (new, executes before slice 5): fully nixified test/harness actions.**
+  The monolithic `scripts/acceptance-kind.sh` decomposes into small, human-readable
+  units exposed through the flake (e.g. `nix run .#<action>` via
+  `writeShellApplication` or equivalent: cluster-up, flux-install, istio-install,
+  git-source, scenario, probes, teardown), each with pinned runtime dependencies
+  and shellcheck at build time, composed by a thin orchestrator. Rules carried
+  over: no fixed-duration sleeps (44), same entry points locally and in CI,
+  ephemeral teardown, probes fail loudly. Determinism rationale is the owner's own:
+  pinned inputs make test runs reproducible, and modules make them readable.
+- **Slice 5 amendments — API-key process and rational CI tiers:**
+  - The Neon API key is NEVER in version control. Local developer process: the key
+    enters via the `NEON_API_KEY` environment variable (sourced from the
+    developer's own environment or a **gitignored** local file the flake dev shell
+    knows how to read); the harness materializes the `neon-api-key` Kubernetes
+    Secret from it at runtime, mirroring how the CNPG credentials secret is
+    already created per run. The harness refuses the managed scenario loudly, with
+    remedy, when the variable is absent.
+  - CI tiers (a consequence, owner-named, of really testing an external service):
+    the fast tier always runs; the self-hosted kind acceptance runs where Docker
+    exists (ubuntu-latest); the **managed/Neon scenario runs only where the
+    `NEON_API_KEY` CI secret is available** (push to main / manual dispatch — not
+    fork PRs, where GitHub withholds secrets). A skipped managed scenario reports
+    itself as SKIPPED/unknown in the job output — never as coverage (rule 49); an
+    unreachable external service fails that tier with the remedy, without
+    poisoning the tiers that need no network.

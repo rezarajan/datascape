@@ -265,6 +265,16 @@ pinentry times out unattended (same incident class as the recorded week-one one)
 The slice commit and this record's commit are held unsigned-nothing-bypassed until
 the owner unlocks the agent.
 
+## Owner directives mid-slice-4: API-key process, rational CI, nixified harness (2026-07-26)
+
+Recorded verbatim in `docs/plans/02-week-two.md` (Revision 3). Execution order once
+slice 4 clears review (overlapping surface — no parallel implementers on the
+harness): **slice 6 first** (decompose the monolithic harness into flake-exposed,
+shellcheck-gated, human-readable `nix run .#<action>` units), **then slice 5** on
+that base (managed/Neon acceptance with `NEON_API_KEY` entering only via
+environment/gitignored local file → runtime Secret; CI runs the managed tier only
+where the secret exists, reporting SKIPPED/unknown otherwise, never coverage).
+
 ## Open items owned by the owner
 
 - **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
