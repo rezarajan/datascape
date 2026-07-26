@@ -19,7 +19,7 @@ mechanically enforcing this distinction kept plans and history honest.)
 | `consolidation.md` | Record | Dated log of doc-consolidation passes (28-day cadence; SessionStart hook warns on lapse). |
 | `plans/01-week-one.md` | Plan | Week-one artifact: compiler + Postgres (CNPG) + two guarantee triples (mTLS, RPO) → Flux manifests. Revision A APPROVED 2026-07-26; owner decisions 2026-07-26: rpo fails closed (one live triple ships), acceptance claim narrowed. |
 | `dogfood.md` | Record | Dated dogfood notes: time-to-stack vs the <1h target (Q2.1), kill-review evidence (Q2.2). First dogfood week opened 2026-07-26; kill review due 2026-08-23. |
-| `plans/02-week-two.md` | Plan | Managed seam proof: `placement: managed` → tofu-controller Terraform CR → Neon; Flux-path harness wiring. **DRAFT — awaiting owner approval.** |
+| `plans/02-week-two.md` | Plan | Managed seam proof: `placement: managed` → tofu-controller Terraform CR → local-bootstrap Neon; Flux-path harness wiring. **APPROVED Revision 1, 2026-07-26** (owner change: local Neon, simulated control plane where needed). |
 
 ## Reading order
 

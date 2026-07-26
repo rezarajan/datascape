@@ -1,7 +1,8 @@
 # Week-two plan — the managed side of the seam pair
 
-**Class: Plan.** **Status: DRAFT (Revision 0), 2026-07-26 — awaiting owner approval.
-No product code lands from this plan until the owner approves it (phase gate).**
+**Class: Plan.** **Status: APPROVED as Revision 1 — 2026-07-26, by the owner, with
+one owner change (local Neon bootstrap; see "Approval round" below). Product code is
+authorized, scoped to this revision's slices and exit criteria.**
 
 Implements the managed half of the contract's single seam pair (amended problem
 definition: *placement is a declared binding; v1 proves exactly ONE seam pair —
@@ -91,3 +92,45 @@ any second component kind; compiling Flux/mesh/tofu-controller installs; self-se
   home?
 - **Does the managed proof double as dogfood note 2**, or does note 2 come from a
   separate real request?
+
+---
+
+## Approval round — 2026-07-26 (answers verbatim, then synthesis → Revision 1)
+
+- **Approval:** "Approve as drafted (Recommended)".
+- **Neon secret question** — the owner answered with a directive instead of a name,
+  verbatim: *"To avoid incurring costs, bootstrap neon locally instead and simulate
+  anything else required to provide the concept around it. This follows the
+  principles of 12-factor, where a dev environment is identical in operation to a
+  production."*
+- **Teardown:** "Harness ephemeral, dogfood persists (Recommended)".
+- **Note 2 source:** "Separate real request (Recommended)".
+
+**Finding (flagged, resolved explicitly, not silently):** the first and second
+answers conflict — "as drafted" included the exit criterion "a real Neon database is
+provisioned" against the paid service, while the Neon answer redirects to a local
+bootstrap. The specific answer wins over the general approval; the plan is treated
+as **approved with that one change (Revision 1)**, amended here:
+
+- **Slice 1 grows into a feasibility spike:** tofu-controller health check as
+  drafted, **plus** the local-Neon path — what Neon ships for local/self-hosted
+  operation (e.g. its local docker image), what control-plane API surface the Neon
+  Terraform provider needs, and whether that provider can target a local endpoint.
+  Whatever the provider cannot do against local Neon is **simulated at the API
+  boundary** per the owner directive — but any simulation is named in the record and
+  in probe output; a simulated leg is labeled, never passed off as the paid-service
+  proof (rule 58's spirit: no claims from memory, none from mocks either).
+- **Exit criteria adjusted (Revision 1):** "a real Neon database is provisioned" →
+  "a locally-bootstrapped Neon database is provisioned through the same emitted
+  `Terraform` CR path, with any simulated control-plane surface named in the harness
+  output." Teardown criteria unchanged in substance (leaked local resources are
+  still harness defects; cost is no longer the rationale, hygiene is).
+- **The API-key secret stays in the design** (the emitted artifact still references
+  a secret by name — the seam's shape must not fork between dev and paid; that IS
+  the owner's 12-factor point). Default name `neon-api-key` stands unless the owner
+  renames it; locally it holds a dummy or local-API token.
+- **Evidence caveat for the kill review, recorded now:** the managed seam will be
+  proven against a locally-bootstrapped Neon, not the paid endpoint. Dev/prod parity
+  is the owner's stated rationale; flipping to the paid endpoint later should be a
+  config change, and doing it once before any public claim is the whitepaper rule's
+  receipt.

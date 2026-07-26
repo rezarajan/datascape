@@ -219,8 +219,12 @@ week-one claims, Neon teardown verified in the harness.
 
 - **Q1.1a**: denominator (5) recorded 2026-07-26; the **team name** is still
   unrecorded — the open sliver, flagged in the problem definition.
-- **Week-two plan approval**: `docs/plans/02-week-two.md` DRAFT Revision 0, plus its
-  three at-approval questions (Neon account/API-key secret; teardown vs persistent
-  dogfood stack; whether the managed proof doubles as dogfood note 2).
+- **Week-two plan approval**: RESOLVED 2026-07-26 — **APPROVED as Revision 1** with
+  one owner change (verbatim in the plan's "Approval round" section): Neon is
+  bootstrapped locally, simulated control-plane surface named where needed, on
+  12-factor dev/prod-parity grounds; conflict with the as-drafted exit criterion
+  flagged and resolved in the plan, not silently. Teardown: harness ephemeral,
+  dogfood persists. Dogfood note 2 comes from a separate real request. Build starts
+  at slice 1 (now a feasibility spike: tofu-controller health + local-Neon path).
 - **Push main**: 12+ local commits unpushed; first real run of the flake-wired CI
   acceptance job waits on it.
