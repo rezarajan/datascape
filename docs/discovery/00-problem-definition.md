@@ -4,7 +4,7 @@
 **Status: SIGNED OFF — 2026-07-25, by the owner, via kickoff questionnaire.
 Amended same day: Amendment 1 (guarantees-compiler reframing) and Amendment 2
 (trust-boundary model) — see end of document.
-Re-sign-off: PENDING one owner confirmation covering both amendments.**
+Re-sign-off: SIGNED OFF — 2026-07-25, by the owner.**
 
 This document becomes the contract that authorizes solution work. It reaches
 **Signed off** only when every round below has recorded answers and the owner has
