@@ -93,6 +93,30 @@
 
           istio-install = action "istio-install" [ pkgs.istioctl ] ./scripts/actions/istio-install.sh;
 
+          # minio-install/minio-secret — the acceptance stack's declared
+          # `external` object store (week-three plan, slice 3): harness
+          # environment scaffolding, exactly like flux-install/
+          # istio-install above (problem definition Amendment 2 —
+          # external by provenance, never d7s-compiled). Split into two
+          # units for the same reason neon-secret is separate from
+          # tofu-install: the app-namespace credentials Secret can't be
+          # created before Flux delivers that namespace into existence,
+          # so minio-secret runs later, invoked from deliver.
+          minio-install = action "minio-install"
+            (with pkgs; [
+              kubectl
+              openssl
+              coreutils
+            ])
+            ./scripts/actions/minio-install.sh;
+
+          minio-secret = action "minio-secret"
+            (with pkgs; [
+              kubectl
+              coreutils
+            ])
+            ./scripts/actions/minio-secret.sh;
+
           git-source = action "git-source"
             (with pkgs; [
               docker-client
@@ -109,6 +133,7 @@
               fluxcd
               openssl
               coreutils
+              minio-secret
             ])
             ./scripts/actions/deliver.sh;
 
@@ -116,22 +141,36 @@
 
           probes = action "probes" (with pkgs; [ kubectl coreutils ]) ./scripts/actions/probes.sh;
 
+          durability-probe = action "durability-probe"
+            (with pkgs; [
+              kubectl
+              gnugrep
+              coreutils
+            ])
+            ./scripts/actions/durability-probe.sh;
+
           teardown = action "teardown" [ pkgs.kind ] ./scripts/actions/teardown.sh;
 
           # The thin orchestrator: same order, same trap-based ephemeral
           # teardown as the monolith it replaces. Each named unit is a
           # derivation exposing /bin/<name>, so listing them as
           # runtimeInputs puts every unit on the orchestrator's PATH.
+          # minio-install runs before delivery (its own namespace, no
+          # dependency on the app namespace existing yet); durability-
+          # probe runs after the mTLS probes, once the app layer (and the
+          # backups-credentials secret deliver materializes) is live.
           acceptance = action "acceptance"
             [
               compile-and-verify
               cluster-up
               flux-install
               istio-install
+              minio-install
               git-source
               deliver
               guard
               probes
+              durability-probe
               teardown
             ]
             ./scripts/actions/acceptance.sh;

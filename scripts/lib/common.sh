@@ -29,6 +29,40 @@ export OUT="${OUT:-./out}"
 export GITSERVER_NS="${GITSERVER_NS:-d7s-harness-git}"
 export GITSERVER_IMAGE="${GITSERVER_IMAGE:-d7s-gitserver:harness}"
 
+# MinIO — the acceptance stack's declared `external` object store (week-
+# three plan, slice 3): stood up by the harness as environment
+# scaffolding, exactly like Flux/Istio above — never d7s-compiled or
+# mutated (problem definition Amendment 2, "external by provenance").
+# Its own namespace mirrors GITSERVER_NS's naming ("d7s-harness-<thing>").
+export MINIO_NS="${MINIO_NS:-d7s-harness-minio}"
+export MINIO_SERVICE="${MINIO_SERVICE:-minio}"
+export MINIO_BUCKET="${MINIO_BUCKET:-d7s-backups}"
+# Pinned exact release tags (verified pullable, 2026-07-26) — harness
+# scaffolding, not compiled output, but pinned anyway rather than
+# `:latest` so a re-run next month isn't the first thing to notice an
+# upstream break.
+export MINIO_IMAGE="${MINIO_IMAGE:-minio/minio:RELEASE.2024-11-07T00-52-20Z}"
+export MC_IMAGE="${MC_IMAGE:-minio/mc:RELEASE.2024-11-05T11-29-45Z}"
+# MINIO_ROOT_CREDS_SECRET_NAME lives in MinIO's own namespace (never the
+# app namespace) — minio-install generates the value once per run and
+# stores it there; minio-secret reads it back to materialize the
+# app-namespace credentials Secret examples/week-one/stack.yaml's
+# external names (the same two-step shape neon-secret/deliver-managed
+# already use for the identical "app namespace doesn't exist yet"
+# constraint).
+export MINIO_ROOT_CREDS_SECRET_NAME="${MINIO_ROOT_CREDS_SECRET_NAME:-minio-root-creds}"
+# Must match internal/adapters/flux/durability.go's
+# objectStoreAccessKeyIDSecretKey / objectStoreSecretAccessKeySecretKey
+# constants exactly — the harness materializes what the compiled
+# Cluster's barmanObjectStore.s3Credentials references by these key
+# names, in whichever Secret the declared external's credentials.secretRef
+# names.
+export OBJECT_STORE_ACCESS_KEY_ID_KEY="${OBJECT_STORE_ACCESS_KEY_ID_KEY:-ACCESS_KEY_ID}"
+export OBJECT_STORE_SECRET_ACCESS_KEY_KEY="${OBJECT_STORE_SECRET_ACCESS_KEY_KEY:-ACCESS_SECRET_KEY}"
+# Must match examples/week-one/stack.yaml's declared external's
+# credentials.secretRef.name exactly.
+export OBJECT_STORE_CREDENTIALS_SECRET_NAME="${OBJECT_STORE_CREDENTIALS_SECRET_NAME:-backups-credentials}"
+
 # Managed/Neon scenario defaults (docs/plans/02-week-two.md Revision 3,
 # slice 5). The managed orchestrator overrides STACK/OUT/CLUSTER_NAME to
 # these before calling the same shared actions the self-hosted scenario

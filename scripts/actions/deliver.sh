@@ -38,6 +38,14 @@ kubectl create secret generic orders-db-app -n week-one \
 	--from-literal=password="$(openssl rand -hex 16)" \
 	--dry-run=client -o yaml | kubectl apply -f -
 
+log "environment prerequisite: create the declared external's credentials secret"
+echo "(same reason as orders-db-app above - CNPG's barmanObjectStore.s3Credentials"
+echo " only consumes a pre-existing secret; minio-install already stood up MinIO"
+echo " and its bucket earlier in the orchestrator - see acceptance.sh - but the"
+echo " credentials secret itself must land here, now that the week-one namespace"
+echo " exists, not inside minio-install)"
+minio-secret
+
 log "wait: Cluster reaches healthy state"
 poll "Cluster healthy" bash -c \
 	"[ \"\$(kubectl get cluster orders-db -n week-one -o jsonpath='{.status.phase}' 2>/dev/null)\" = 'Cluster in healthy state' ]"

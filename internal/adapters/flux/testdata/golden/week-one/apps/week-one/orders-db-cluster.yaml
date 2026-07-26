@@ -7,6 +7,8 @@ metadata:
     d7s.dev/component: orders-db
     d7s.dev/managed-by: d7s
     d7s.dev/stack: week-one
+  annotations:
+    d7s.dev/guarantee-durability: conditional-on-external
 spec:
   instances: 1
   bootstrap:
@@ -17,3 +19,15 @@ spec:
         name: orders-db-app
   storage:
     size: 1Gi
+  backup:
+    retentionPolicy: 30d
+    barmanObjectStore:
+      destinationPath: s3://d7s-backups/
+      endpointURL: http://minio.d7s-harness-minio.svc:9000
+      s3Credentials:
+        accessKeyId:
+          name: backups-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: backups-credentials
+          key: ACCESS_SECRET_KEY

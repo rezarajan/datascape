@@ -1,0 +1,16 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: orders-db
+  namespace: week-one
+  labels:
+    d7s.dev/component: orders-db
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: week-one
+  annotations:
+    d7s.dev/guarantee-durability: conditional-on-external
+spec:
+  schedule: '@every 1h0m0s'
+  cluster:
+    name: orders-db
+  immediate: true

@@ -1,6 +1,14 @@
 apiVersion: d7s.dev/v1alpha1
 kind: Stack
 name: week-one
+external:
+  - name: backups
+    objectStore:
+      endpoint: http://minio.d7s-harness-minio.svc:9000
+      bucket: d7s-backups
+      credentials:
+        secretRef:
+          name: backups-credentials
 components:
   - kind: postgres
     name: orders-db
@@ -10,5 +18,8 @@ components:
         name: orders-db-app
     guarantees:
       mtls: {}
+      rpo:
+        target: 1h
+        backupTo: backups
     allowedConsumers:
       - serviceAccount: probe-client

@@ -15,14 +15,15 @@ import (
 )
 
 // exampleStack mirrors examples/week-one/stack.yaml: the week-one
-// artifact ships exactly one live guarantee triple, mTLS (owner
-// decision, week-one plan "Owner decisions — 2026-07-26"). It carries
-// no guarantees.rpo — that guarantee now fails compilation closed before
-// reaching this emitter at all (internal/domain/guarantees.go) — so it
-// is exercised directly against the emitter below instead
-// (TestEmitWithRPOGuaranteeEmitsBackupObjects,
-// TestEmitUnsatisfiableRPORefused), keeping the gated durability
-// machinery unit-tested without it ever reaching the golden output.
+// artifact composes two guarantee families on the same component — mTLS
+// and RPO-backed durability (week-three plan, slice 3) — proving the
+// composition that week one's live acceptance run first caught as a bug
+// (a mesh-only AuthorizationPolicy rule set that also had to admit the
+// CNPG operator's own status polling; see emitZeroTrust's doc comment).
+// The durability leg wires guarantees.rpo to weekOneBackupsExternal, the
+// declared external the acceptance harness's own MinIO stands up
+// (scripts/actions/minio-install.sh) — external by provenance
+// (Amendment 2), never d7s-compiled.
 func exampleStack() domain.Stack {
 	return domain.Stack{
 		Name: "week-one",
@@ -33,11 +34,29 @@ func exampleStack() domain.Stack {
 				Credentials: domain.SecretRef{Name: "orders-db-app"},
 				Guarantees: domain.Guarantees{
 					MTLS: &domain.MTLSGuarantee{},
+					RPO:  &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"},
 				},
 				AllowedConsumers: []domain.AllowedConsumer{
 					{ServiceAccount: "probe-client"},
 				},
 			},
+		},
+		Externals: []domain.External{weekOneBackupsExternal()},
+	}
+}
+
+// weekOneBackupsExternal mirrors examples/week-one/stack.yaml's declared
+// external exactly: the endpoint names the harness's in-cluster MinIO
+// service DNS (scripts/actions/minio-install.sh stands it up in the
+// d7s-harness-minio namespace, plain HTTP — an in-cluster-only service,
+// no TLS cert to manage for a throwaway harness store).
+func weekOneBackupsExternal() domain.External {
+	return domain.External{
+		Name: "backups",
+		ObjectStore: &domain.ObjectStoreExternal{
+			Endpoint:    "http://minio.d7s-harness-minio.svc:9000",
+			Bucket:      "d7s-backups",
+			Credentials: domain.SecretRef{Name: "backups-credentials"},
 		},
 	}
 }
@@ -428,27 +447,16 @@ func TestEmitDurabilityDeterministic(t *testing.T) {
 	}
 }
 
-// TestEmitWeekOneAndManagedExamplesUnaffectedByDurability proves adding
-// the durability triple's wiring did not change one byte of the existing
-// week-one or managed golden output (no regression) — neither example
-// declares guarantees.rpo or an external, so the new machinery must be
-// fully inert for them.
-func TestEmitWeekOneAndManagedExamplesUnaffectedByDurability(t *testing.T) {
-	selfHosted, err := flux.New().Emit(exampleStack())
-	if err != nil {
-		t.Fatalf("Emit (self-hosted): %v", err)
-	}
-	wantSelfHosted := readGoldenDir(t, filepath.Join("testdata", "golden", "week-one"))
-	if len(selfHosted.Files) != len(wantSelfHosted) {
-		t.Fatalf("self-hosted: emitted %d files, golden has %d", len(selfHosted.Files), len(wantSelfHosted))
-	}
-	for path, wantBytes := range wantSelfHosted {
-		gotBytes, ok := selfHosted.Files[path]
-		if !ok || !bytes.Equal(gotBytes, wantBytes) {
-			t.Errorf("self-hosted golden file %s regressed", path)
-		}
-	}
-
+// TestEmitManagedExampleUnaffectedByWeekOneDurability proves composing
+// mTLS+RPO onto the self-hosted week-one example (week-three plan,
+// slice 3) changed no byte of the managed-placement golden output — the
+// managed example declares no guarantees.rpo (placement: managed still
+// refuses it, internal/domain/postgres.go), so it must stay fully inert.
+// (The self-hosted, no-regression-from-durability claim this test used
+// to also make for week-one no longer holds — week-one's own golden
+// output now legitimately includes the durability triple; that shape is
+// pinned instead by TestEmitGoldenFiles.)
+func TestEmitManagedExampleUnaffectedByWeekOneDurability(t *testing.T) {
 	managed, err := flux.New().Emit(managedExampleStack())
 	if err != nil {
 		t.Fatalf("Emit (managed): %v", err)
@@ -474,11 +482,27 @@ func TestEmitWeekOneAndManagedExamplesUnaffectedByDurability(t *testing.T) {
 // this package): an external declaration with no component referencing
 // it changes zero emitted bytes. Compares the exact same stack with and
 // without the declared external and requires byte-identical file sets —
-// not merely "no crash".
+// not merely "no crash". Built on a plain, guarantee-free stack rather
+// than exampleStack() (whose guarantees.rpo now references "backups" —
+// week-three plan, slice 3): the external declared here must stay
+// genuinely unreferenced by anything.
 func TestEmitExternalAloneEmitsNoBytes(t *testing.T) {
-	without := exampleStack()
+	plainStack := func() domain.Stack {
+		return domain.Stack{
+			Name: "week-one",
+			Components: []domain.Component{
+				domain.Postgres{
+					Name:        "orders-db",
+					Placement:   domain.PlacementSelfHosted,
+					Credentials: domain.SecretRef{Name: "orders-db-app"},
+				},
+			},
+		}
+	}
 
-	withExternal := exampleStack()
+	without := plainStack()
+
+	withExternal := plainStack()
 	withExternal.Externals = []domain.External{backupsExternal()}
 
 	gotWithout, err := flux.New().Emit(without)
