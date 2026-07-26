@@ -173,6 +173,50 @@ require_repo_root() {
 	fi
 }
 
+# shellcheck disable=SC2329 # shared helper - only deliver.sh calls this
+require_flux_prereq() {
+	# deliver's very first `kubectl apply` targets a Kustomization CR in
+	# namespace flux-system (internal/adapters/flux/flux.go's emitted
+	# objects) - without Flux installed, that apply fails with a raw
+	# "namespaces \"flux-system\" not found" instead of naming the actual
+	# missing prerequisite. Same class of trap dogfood note 3 found for
+	# MinIO (docs/dogfood.md, 2026-07-26) - fail closed with the remedy
+	# instead (rules 34, 35).
+	if ! kubectl get namespace flux-system >/dev/null 2>&1; then
+		echo "refusing to deliver: namespace flux-system not found - Flux is an environment prerequisite for delivery - remedy: run 'nix run .#flux-install' first; the 'nix run .#acceptance' orchestrator does this for you" >&2
+		exit 1
+	fi
+}
+
+# shellcheck disable=SC2329 # shared helper - only deliver.sh calls this
+require_istio_prereq() {
+	# guarantees.mtls compiles a PeerAuthentication/AuthorizationPolicy
+	# pair with nothing to enforce against unless Istio ambient mode is
+	# installed - without it, Flux's own reconciliation of those objects
+	# never reaches Ready and deliver's poll below just times out after
+	# its full bounded budget with a generic message, not a clear
+	# prerequisite name. Fail closed up front instead (rules 34, 35),
+	# same reasoning as require_flux_prereq above.
+	if ! kubectl get crd peerauthentications.security.istio.io >/dev/null 2>&1; then
+		echo "refusing to deliver: Istio ambient mode is not installed (CRD peerauthentications.security.istio.io not found) - guarantees.mtls has no mesh to enforce against - remedy: run 'nix run .#istio-install' first; the 'nix run .#acceptance' orchestrator does this for you" >&2
+		exit 1
+	fi
+}
+
+# shellcheck disable=SC2329 # shared helper - only deliver.sh calls this
+require_minio_prereq() {
+	# The declared external's backing store must exist before deliver's
+	# minio-secret step reads its root credentials out of $MINIO_NS (dogfood
+	# note 3, docs/dogfood.md, 2026-07-26: the first human cold run hit a
+	# raw "namespaces \"d7s-harness-minio\" not found" right here, because
+	# the piecemeal QUICKSTART sequence it followed omitted minio-install).
+	# Fail closed with the remedy instead (rules 34, 35, 49).
+	if ! kubectl get namespace "$MINIO_NS" >/dev/null 2>&1 || ! kubectl get deployment minio -n "$MINIO_NS" >/dev/null 2>&1; then
+		echo "refusing to deliver: MinIO not found (namespace $MINIO_NS / deployment minio) - MinIO is a harness prerequisite for this stack's durability guarantee - remedy: run 'nix run .#minio-install' first; the 'nix run .#acceptance' orchestrator does this for you" >&2
+		exit 1
+	fi
+}
+
 # shellcheck disable=SC2329 # shared helper - not every action embedding
 # common.sh calls it (e.g. teardown-managed already has NEON_API_KEY in
 # its environment from the orchestrator and never re-reads .env itself).

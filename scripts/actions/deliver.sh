@@ -20,7 +20,21 @@
 # and, further down, the legitimate bounded wait on the Cluster's own
 # final healthy state (rule 44: waiting for an outcome is fine: re-doing
 # the ordering procedurally is not).
+#
+# dogfood note 3 (docs/dogfood.md, 2026-07-26): the first human cold run
+# hit a raw Kubernetes NotFound here instead of a remedy, because the
+# piecemeal QUICKSTART sequence it followed omitted minio-install. Cheap,
+# up-front prerequisite checks (scripts/lib/common.sh) now cover every
+# environment prerequisite this script itself depends on before doing
+# anything - Flux (its first kubectl apply targets flux-system), Istio
+# (guarantees.mtls has nothing to enforce against without it - otherwise
+# only surfaces later as a generic poll timeout), and MinIO (the durability
+# guarantee's declared external, dogfood note 3's own failure) - so a cold
+# operator gets a named prerequisite and its remedy, never a raw API error.
 require_repo_root
+require_flux_prereq
+require_istio_prereq
+require_minio_prereq
 
 log "flux: git push  # register the git source, named/namespaced for the emitter's sourceRef"
 register_git_source

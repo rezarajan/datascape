@@ -95,8 +95,12 @@ Two ways to see the compiled output actually running, on a throwaway
 
 - **Piecemeal**, one step at a time (each is its own flake action, useful if you
   want to inspect state between steps): `nix run .#cluster-up`, `.#flux-install`,
-  `.#istio-install`, `.#git-source`, `.#deliver`, `.#guard`, `.#probes`,
-  `.#teardown`. See `scripts/actions/` for what each one does.
+  `.#istio-install`, `.#minio-install`, `.#git-source`, `.#deliver`, `.#guard`,
+  `.#probes`, `.#durability-probe`, `.#teardown`. See `scripts/actions/` for
+  what each one does — this is the same order `nix run .#acceptance` runs them
+  in (`scripts/actions/acceptance.sh`); `minio-install` stands up the declared
+  `external` object store the durability guarantee backs up to, and must run
+  before `deliver` materializes its app-namespace credentials secret.
 
 ### The managed scenario (`placement: managed`)
 
@@ -151,7 +155,7 @@ read these, not your YAML.
   external:
     - name: backups
       objectStore:
-        endpoint: https://minio.d7s-harness.svc:9000
+        endpoint: http://minio.d7s-harness-minio.svc:9000
         bucket: d7s-backups
         credentials:
           secretRef:
