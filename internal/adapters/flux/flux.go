@@ -75,9 +75,15 @@ func New() *Emitter {
 // Emit implements ports.Emitter. It checks every component against what
 // this target can actually honor before writing anything (golden
 // rule 33's spirit carried into the emitter): an unsatisfiable RPO on
-// one component must not leave a partial compile behind.
+// one component must not leave a partial compile behind. Components are
+// then split by placement (week-two plan, slices 2+3): self-hosted
+// compiles to CNPG, managed to a Terraform CR wrapping a Neon provider
+// config — domain validation already guarantees no other placement value
+// and no mtls/allowedConsumers/rpo on a managed component ever reaches
+// here (internal/domain/postgres.go, internal/domain/guarantees.go), so
+// the default branch below is a defensive, not a live, path.
 func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
-	var pgs []domain.Postgres
+	var selfHosted, managed []domain.Postgres
 	var errs []error
 	for _, c := range stack.Components {
 		pg, ok := c.(domain.Postgres)
@@ -91,35 +97,52 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 			errs = append(errs, err)
 			continue
 		}
-		pgs = append(pgs, pg)
+		switch pg.Placement {
+		case domain.PlacementSelfHosted:
+			selfHosted = append(selfHosted, pg)
+		case domain.PlacementManaged:
+			managed = append(managed, pg)
+		default:
+			errs = append(errs, fmt.Errorf(
+				"flux emitter: postgres component %q: placement %q reached the emitter without "+
+					"domain validation catching it — this is a defect", pg.Name, pg.Placement))
+		}
 	}
 	if len(errs) > 0 {
 		return ports.Manifests{}, errors.Join(errs...)
 	}
+	total := len(selfHosted) + len(managed)
 
 	meshEnabled := false
-	for _, pg := range pgs {
+	for _, pg := range selfHosted {
 		if pg.Guarantees.MTLS != nil {
 			meshEnabled = true
 		}
 	}
 
 	files := map[string][]byte{}
-	if len(pgs) > 0 {
+	if len(selfHosted) > 0 {
 		if err := emitCNPGOperator(files, meshEnabled); err != nil {
 			return ports.Manifests{}, err
 		}
 	}
-	if err := emitAppNamespace(files, stack.Name, meshEnabled); err != nil {
-		return ports.Manifests{}, err
-	}
-	for _, pg := range pgs {
-		if err := emitPostgres(files, stack.Name, pg); err != nil {
+	if total > 0 {
+		if err := emitAppNamespace(files, stack.Name, meshEnabled); err != nil {
 			return ports.Manifests{}, err
 		}
 	}
-	if len(pgs) > 0 {
-		if err := emitAppKustomization(files, stack.Name); err != nil {
+	for _, pg := range selfHosted {
+		if err := emitSelfHostedPostgres(files, stack.Name, pg); err != nil {
+			return ports.Manifests{}, err
+		}
+	}
+	for _, pg := range managed {
+		if err := emitManagedPostgres(files, stack.Name, pg); err != nil {
+			return ports.Manifests{}, err
+		}
+	}
+	if total > 0 {
+		if err := emitAppKustomization(files, stack.Name, len(selfHosted) > 0); err != nil {
 			return ports.Manifests{}, err
 		}
 	}
@@ -167,7 +190,12 @@ func checkRPOSatisfiable(pg domain.Postgres) error {
 	return nil
 }
 
-func emitPostgres(files map[string][]byte, stackName string, pg domain.Postgres) error {
+// emitSelfHostedPostgres compiles the self-hosted (CNPG) artifact for pg:
+// the Cluster CR plus the zero-trust and durability guarantee triples'
+// emitted-infra elements. Named explicitly (rather than plain
+// "emitPostgres") since placement: managed now compiles through a
+// different function, emitManagedPostgres (week-two plan, slices 2+3).
+func emitSelfHostedPostgres(files map[string][]byte, stackName string, pg domain.Postgres) error {
 	if err := emitCluster(files, stackName, pg); err != nil {
 		return err
 	}
@@ -409,7 +437,28 @@ func emitDurability(files map[string][]byte, stackName string, pg domain.Postgre
 	return set(files, fmt.Sprintf("apps/%s/%s-scheduledbackup.yaml", stackName, pg.Name), sb)
 }
 
-func emitAppKustomization(files map[string][]byte, stackName string) error {
+// emitAppKustomization emits the per-stack app-layer Kustomization.
+// dependsOnCNPGOperator is true only when the stack has at least one
+// self-hosted component: that Cluster CR needs the CNPG CRDs the infra
+// layer installs — a real ordering dependency, compiled into Flux's own
+// dependency mechanism (golden rule 24). A managed-only stack has no
+// such edge: tofu-controller's own CRDs are a declared environment
+// prerequisite this week, not something d7s compiles (week-two plan,
+// "explicitly NOT this week"), so adding a dependsOn to a Kustomization
+// this compile never emits would be a dangling, hidden edge — exactly
+// what rule 24 warns against.
+func emitAppKustomization(files map[string][]byte, stackName string, dependsOnCNPGOperator bool) error {
+	spec := KustomizationSpec{
+		Interval:  reconcileInterval,
+		Path:      fmt.Sprintf("./out/apps/%s", stackName),
+		Prune:     true,
+		SourceRef: gitSourceRef,
+	}
+	if dependsOnCNPGOperator {
+		spec.DependsOn = []DependsOn{
+			{Name: infraKustomizationName, Namespace: fluxSystemNamespace},
+		}
+	}
 	k := Kustomization{
 		APIVersion: "kustomize.toolkit.fluxcd.io/v1",
 		Kind:       "Kustomization",
@@ -418,18 +467,7 @@ func emitAppKustomization(files map[string][]byte, stackName string) error {
 			Namespace: fluxSystemNamespace,
 			Labels:    ownershipLabels(stackName, ""),
 		},
-		Spec: KustomizationSpec{
-			Interval:  reconcileInterval,
-			Path:      fmt.Sprintf("./out/apps/%s", stackName),
-			Prune:     true,
-			SourceRef: gitSourceRef,
-			// The app layer's Cluster CR needs the CNPG CRDs the infra
-			// layer installs — a real ordering dependency, compiled into
-			// Flux's own dependency mechanism (golden rule 24).
-			DependsOn: []DependsOn{
-				{Name: infraKustomizationName, Namespace: fluxSystemNamespace},
-			},
-		},
+		Spec: spec,
 	}
 	return set(files, fmt.Sprintf("flux/apps-%s.yaml", stackName), k)
 }

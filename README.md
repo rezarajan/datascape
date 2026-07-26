@@ -30,9 +30,8 @@ The week-one plan (`docs/plans/01-week-one.md`, Revision A) is approved and buil
 with one guarantee triple proven end-to-end on a live kind cluster (mesh mTLS +
 default-deny authorization). The durability/RPO guarantee ships no live triple this
 week: v1 has no declarable backup destination, so `guarantees.rpo` fails compilation
-closed, the same way `placement: managed` does — a declarable destination is planned
-for the week-two+ skeleton (owner decision, week-one plan "Owner decisions —
-2026-07-26"). Try it:
+closed on every placement — a declarable destination is planned for the week-two+
+skeleton (owner decision, week-one plan "Owner decisions — 2026-07-26"). Try it:
 
 ```
 go build -o d7s ./cmd/d7s

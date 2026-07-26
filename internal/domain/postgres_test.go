@@ -26,15 +26,107 @@ func TestPostgresValidateAcceptsValid(t *testing.T) {
 	}
 }
 
-func TestPostgresValidateManagedPlacementFailsClosed(t *testing.T) {
+// TestPostgresValidateManagedPlacementCompiles proves placement: managed
+// now compiles (week-two plan, slices 2+3): the seam proof requires that
+// the same declaration, with only placement flipped and no
+// mtls/allowedConsumers/rpo declared, validates cleanly.
+func TestPostgresValidateManagedPlacementCompiles(t *testing.T) {
+	p := validPostgres()
+	p.Placement = domain.PlacementManaged
+	p.Guarantees.MTLS = nil
+	if errs := p.Validate(); len(errs) != 0 {
+		t.Fatalf("expected no errors, got %v", errs)
+	}
+}
+
+// TestPostgresValidateMTLSRefusedOnManagedPlacement proves the
+// transport-security guarantee refuses to compile against managed
+// placement rather than silently degrading (golden rules 34, 37, 50):
+// mesh mTLS and its compiled authorization cannot cover a
+// provider-terminated endpoint outside the mesh.
+func TestPostgresValidateMTLSRefusedOnManagedPlacement(t *testing.T) {
 	p := validPostgres()
 	p.Placement = domain.PlacementManaged
 	errs := p.Validate()
 	if len(errs) != 1 {
 		t.Fatalf("expected exactly 1 error, got %v", errs)
 	}
-	if got := errs[0].Error(); !strings.Contains(got, "planned, not yet available") {
+	got := errs[0].Error()
+	if !strings.Contains(got, "guarantees.mtls + placement: managed refuses to compile") {
+		t.Errorf("error %q does not name the boundary", got)
+	}
+	if !strings.Contains(got, "placement: self-hosted") || !strings.Contains(got, "remove guarantees.mtls") {
 		t.Errorf("error %q does not carry the remedy (golden rule 35)", got)
+	}
+}
+
+// TestPostgresValidateMTLSRefusalAggregatesWithOtherErrors pins the
+// mtls+managed refusal's aggregation with other validation errors
+// (rule 33), mirroring the existing rpo aggregation test.
+func TestPostgresValidateMTLSRefusalAggregatesWithOtherErrors(t *testing.T) {
+	p := validPostgres()
+	p.Name = ""
+	p.Placement = domain.PlacementManaged
+	errs := p.Validate()
+	joined := errors.Join(errs...).Error()
+	if !strings.Contains(joined, "name is required") {
+		t.Errorf("aggregated errors %v do not include the name error", errs)
+	}
+	if !strings.Contains(joined, "guarantees.mtls + placement: managed refuses to compile") {
+		t.Errorf("aggregated errors %v do not include the mtls refusal", errs)
+	}
+}
+
+// TestPostgresValidateAllowedConsumersRefusedOnManagedPlacement mirrors
+// the mtls case for the consumer allow-list: it compiles to a mesh
+// AuthorizationPolicy, which cannot gate a provider-terminated endpoint.
+func TestPostgresValidateAllowedConsumersRefusedOnManagedPlacement(t *testing.T) {
+	p := validPostgres()
+	p.Placement = domain.PlacementManaged
+	p.Guarantees.MTLS = nil
+	p.AllowedConsumers = []domain.AllowedConsumer{{ServiceAccount: "probe-client"}}
+	errs := p.Validate()
+	if len(errs) != 1 {
+		t.Fatalf("expected exactly 1 error, got %v", errs)
+	}
+	got := errs[0].Error()
+	if !strings.Contains(got, "allowedConsumers + placement: managed refuses to compile") {
+		t.Errorf("error %q does not name the boundary", got)
+	}
+	if !strings.Contains(got, "placement: self-hosted") || !strings.Contains(got, "remove allowedConsumers") {
+		t.Errorf("error %q does not carry the remedy (golden rule 35)", got)
+	}
+}
+
+// TestPostgresValidateWithoutAllowedConsumersOrMTLSManagedCompiles proves
+// the same declaration, minus allowedConsumers and guarantees.mtls,
+// compiles cleanly on managed placement (rule 49: the refusal shown able
+// to fail and pass).
+func TestPostgresValidateWithoutAllowedConsumersOrMTLSManagedCompiles(t *testing.T) {
+	p := validPostgres()
+	p.Placement = domain.PlacementManaged
+	p.Guarantees.MTLS = nil
+	p.AllowedConsumers = nil
+	if errs := p.Validate(); len(errs) != 0 {
+		t.Fatalf("expected no errors, got %v", errs)
+	}
+}
+
+// TestPostgresValidateRPORefusedOnManagedPlacementToo verifies
+// guarantees.rpo continues to refuse on managed placement too — not
+// assumed from the self-hosted case, since the two placements are
+// validated by separate switch arms above it.
+func TestPostgresValidateRPORefusedOnManagedPlacementToo(t *testing.T) {
+	p := validPostgres()
+	p.Placement = domain.PlacementManaged
+	p.Guarantees.MTLS = nil
+	p.Guarantees.RPO = &domain.RPOGuarantee{Target: time.Hour}
+	errs := p.Validate()
+	if len(errs) != 1 {
+		t.Fatalf("expected exactly 1 error, got %v", errs)
+	}
+	if !strings.Contains(errs[0].Error(), "planned, not yet available") {
+		t.Errorf("error %q does not carry the remedy (golden rule 35)", errs[0].Error())
 	}
 }
 

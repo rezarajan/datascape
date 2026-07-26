@@ -19,8 +19,13 @@ func (p Postgres) Kind() ComponentKind { return KindPostgres }
 
 // Validate reports every structural problem with p, aggregated rather
 // than stopping at the first (golden rule 33: validate-time
-// completeness). Unimplemented paths — placement: managed — refuse
-// loudly here rather than being silently accepted (golden rule 34).
+// completeness). Both placements compile (week-two plan, slices 2+3):
+// self-hosted to the Flux/CNPG target, managed to the Flux/tofu-controller
+// target wrapping a Neon provider config. A guarantee whose meaning
+// cannot survive the placement change refuses loudly here rather than
+// silently degrading (golden rules 34, 37, 50) — mesh mTLS and the
+// AuthorizationPolicy allow-list it depends on cannot cover a
+// provider-terminated endpoint outside the mesh.
 func (p Postgres) Validate() []error {
 	var errs []error
 
@@ -30,11 +35,10 @@ func (p Postgres) Validate() []error {
 
 	switch p.Placement {
 	case PlacementSelfHosted:
-		// the only placement week one compiles
+		// compiles to the Flux/CNPG target
 	case PlacementManaged:
-		errs = append(errs, fmt.Errorf(
-			"postgres component %q: placement \"managed\" is planned, not yet available — use placement: self-hosted",
-			p.Name))
+		// compiles to the Flux/tofu-controller target; guarantee-specific
+		// refusals for this placement are below, not here
 	case "":
 		errs = append(errs, fmt.Errorf(
 			"postgres component %q: placement is required (self-hosted | managed)", p.Name))
@@ -52,10 +56,40 @@ func (p Postgres) Validate() []error {
 
 	errs = append(errs, p.Guarantees.Validate(p.Name)...)
 
-	if len(p.AllowedConsumers) > 0 && p.Guarantees.MTLS == nil {
+	// guarantees.mtls + placement: managed refuses (week-two plan): the
+	// transport-security guarantee is mesh mTLS (PeerAuthentication
+	// STRICT) plus compiled authorization, which cannot cover a
+	// provider-terminated endpoint outside the mesh — no best-effort TLS
+	// substitution (golden rule 50).
+	if p.Placement == PlacementManaged && p.Guarantees.MTLS != nil {
 		errs = append(errs, fmt.Errorf(
-			"postgres component %q: allowedConsumers declared without guarantees.mtls — there is no enforcement point without it; declare guarantees.mtls too",
+			"postgres component %q: guarantees.mtls + placement: managed refuses to compile — "+
+				"the transport-security guarantee is mesh mTLS (PeerAuthentication STRICT) plus "+
+				"compiled authorization, and cannot cover a provider-terminated endpoint outside "+
+				"the mesh; choose placement: self-hosted to keep guarantees.mtls, or remove "+
+				"guarantees.mtls to keep placement: managed",
 			p.Name))
+	}
+
+	if len(p.AllowedConsumers) > 0 {
+		if p.Placement == PlacementManaged {
+			// allowedConsumers + placement: managed refuses (week-two
+			// plan): the allow-list compiles to a mesh AuthorizationPolicy,
+			// which cannot gate a provider-terminated endpoint outside the
+			// mesh — a schema-accepted field nothing consumes here would
+			// be a defect otherwise (golden rule 34).
+			errs = append(errs, fmt.Errorf(
+				"postgres component %q: allowedConsumers + placement: managed refuses to compile — "+
+					"a consumer allow-list compiles to a mesh AuthorizationPolicy, which cannot gate "+
+					"a provider-terminated endpoint outside the mesh; remove allowedConsumers, or "+
+					"choose placement: self-hosted (enforcement for managed placement arrives with "+
+					"egress compilation, skeleton scope)",
+				p.Name))
+		} else if p.Guarantees.MTLS == nil {
+			errs = append(errs, fmt.Errorf(
+				"postgres component %q: allowedConsumers declared without guarantees.mtls — there is no enforcement point without it; declare guarantees.mtls too",
+				p.Name))
+		}
 	}
 	for i, consumer := range p.AllowedConsumers {
 		if consumer.ServiceAccount == "" {

@@ -1,0 +1,10 @@
+apiVersion: d7s.dev/v1alpha1
+kind: Stack
+name: week-one
+components:
+  - kind: postgres
+    name: orders-db
+    placement: managed
+    credentials:
+      secretRef:
+        name: orders-db-app

@@ -1,0 +1,25 @@
+apiVersion: infra.contrib.fluxcd.io/v1alpha2
+kind: Terraform
+metadata:
+  name: orders-db
+  namespace: week-one
+  labels:
+    d7s.dev/component: orders-db
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: week-one
+spec:
+  interval: 10m
+  path: ./out/apps/week-one/orders-db-managed
+  approvePlan: auto
+  sourceRef:
+    kind: GitRepository
+    name: d7s
+    namespace: flux-system
+  runnerPodTemplate:
+    spec:
+      env:
+        - name: NEON_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: neon-api-key
+              key: apiKey

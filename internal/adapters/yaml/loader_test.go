@@ -1,6 +1,7 @@
 package yaml_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -92,15 +93,57 @@ func TestLoadInvalidRPODurationRefused(t *testing.T) {
 	}
 }
 
-func TestLoadManagedPlacementParsesButFailsDomainValidation(t *testing.T) {
+// managedDoc mirrors validDoc with placement flipped to managed and no
+// guarantees.mtls/allowedConsumers declared — the seam proof shape
+// (week-two plan): the same declaration, only placement flipped,
+// compiles cleanly.
+const managedDoc = `
+apiVersion: d7s.dev/v1alpha1
+kind: Stack
+name: week-one
+components:
+  - kind: postgres
+    name: orders-db
+    placement: managed
+    credentials:
+      secretRef:
+        name: orders-db-app
+`
+
+// TestLoadManagedPlacementWithoutGuaranteesCompiles proves placement:
+// managed now compiles (week-two plan, slices 2+3) when no guarantee
+// whose meaning cannot survive the placement change is declared.
+func TestLoadManagedPlacementWithoutGuaranteesCompiles(t *testing.T) {
+	stack, err := yaml.New().Load([]byte(managedDoc))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if errs := stack.Validate(); len(errs) != 0 {
+		t.Fatalf("expected the loaded managed-placement stack to validate cleanly, got %v", errs)
+	}
+}
+
+// TestLoadManagedPlacementWithMTLSAndAllowedConsumersFailsDomainValidation
+// proves the schema still structurally accepts guarantees.mtls and
+// allowedConsumers alongside placement: managed (golden rule 34's
+// "schema-accepted, refused loudly" shape, not a parse-time rejection),
+// but domain validation refuses both together, aggregated (rule 33).
+func TestLoadManagedPlacementWithMTLSAndAllowedConsumersFailsDomainValidation(t *testing.T) {
 	doc := strings.Replace(validDoc, "placement: self-hosted", "placement: managed", 1)
 	stack, err := yaml.New().Load([]byte(doc))
 	if err != nil {
 		t.Fatalf("expected the schema to accept placement: managed structurally, got parse error: %v", err)
 	}
 	errs := stack.Validate()
-	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "planned, not yet available") {
-		t.Fatalf("expected domain validation to refuse managed placement with a remedy, got %v", errs)
+	if len(errs) != 2 {
+		t.Fatalf("expected exactly 2 aggregated errors (mtls + allowedConsumers), got %v", errs)
+	}
+	joined := errors.Join(errs...).Error()
+	if !strings.Contains(joined, "guarantees.mtls + placement: managed refuses to compile") {
+		t.Errorf("aggregated errors %v do not include the mtls refusal", errs)
+	}
+	if !strings.Contains(joined, "allowedConsumers + placement: managed refuses to compile") {
+		t.Errorf("aggregated errors %v do not include the allowedConsumers refusal", errs)
 	}
 }
 

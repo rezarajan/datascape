@@ -273,6 +273,158 @@ func TestEmitUnsatisfiableRPORefused(t *testing.T) {
 	}
 }
 
+// managedExampleStack mirrors examples/week-two/managed-stack.yaml, which
+// in turn mirrors examples/week-one/stack.yaml with placement flipped to
+// managed and no guarantees.mtls/allowedConsumers/rpo declared — the seam
+// proof shape (week-two plan, slices 2+3): the same declaration, only
+// placement flipped, compiles to a different artifact.
+func managedExampleStack() domain.Stack {
+	return domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementManaged,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+			},
+		},
+	}
+}
+
+// TestEmitManagedGoldenFiles pins the managed-placement artifact against
+// the checked-in golden tree (golden rule 45): a namespace, the OpenTofu
+// config (project/database/role), and the wrapping Terraform CR — no
+// CNPG operator install and no dependsOn edge, since nothing self-hosted
+// exists in this stack (golden rule 24: no dangling/hidden edges).
+func TestEmitManagedGoldenFiles(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+
+	want := readGoldenDir(t, filepath.Join("testdata", "golden", "managed"))
+
+	if len(manifests.Files) != len(want) {
+		t.Fatalf("emitted %d files, golden has %d\nemitted: %v\ngolden: %v",
+			len(manifests.Files), len(want), sortedKeys(manifests.Files), sortedKeys(want))
+	}
+	for path, wantBytes := range want {
+		gotBytes, ok := manifests.Files[path]
+		if !ok {
+			t.Errorf("golden file %s was not emitted", path)
+			continue
+		}
+		if !bytes.Equal(gotBytes, wantBytes) {
+			t.Errorf("emitted %s differs from golden:\n--- got ---\n%s\n--- want ---\n%s", path, gotBytes, wantBytes)
+		}
+	}
+}
+
+// TestEmitManagedDeterministic compiles the managed-placement declaration
+// twice and requires byte-identical output (golden rules 22, 45).
+func TestEmitManagedDeterministic(t *testing.T) {
+	a, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (first): %v", err)
+	}
+	b, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (second): %v", err)
+	}
+	if len(a.Files) != len(b.Files) {
+		t.Fatalf("file count differs across compiles: %d vs %d", len(a.Files), len(b.Files))
+	}
+	for path, want := range a.Files {
+		got, ok := b.Files[path]
+		if !ok {
+			t.Fatalf("second compile is missing file %s", path)
+		}
+		if !bytes.Equal(want, got) {
+			t.Errorf("file %s is not byte-identical across compiles", path)
+		}
+	}
+}
+
+// TestEmitManagedPlacementEmitsNoCNPGOperatorOrDependsOn proves a
+// managed-only stack never emits the CNPG operator install or a
+// dependsOn edge pointing at it — that edge would be dangling (golden
+// rule 24) since nothing in this stack needs CNPG's CRDs.
+func TestEmitManagedPlacementEmitsNoCNPGOperatorOrDependsOn(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for path := range manifests.Files {
+		if strings.HasPrefix(path, "infra/cnpg-operator/") || path == "flux/infra-cnpg-operator.yaml" {
+			t.Errorf("emitted %s for a managed-only stack with no self-hosted component", path)
+		}
+	}
+	if bytes.Contains(manifests.Files["flux/apps-week-one.yaml"], []byte("dependsOn")) {
+		t.Error("apps Kustomization carries a dependsOn edge with no self-hosted component to justify it")
+	}
+}
+
+// TestEmitManagedPlacementCarriesOwnershipLabels proves the Terraform CR
+// and its namespace carry the d7s.dev/* ownership labels (golden rule 27)
+// exactly like every other emitted object.
+func TestEmitManagedPlacementCarriesOwnershipLabels(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	tf := string(manifests.Files["apps/week-one/orders-db-terraform.yaml"])
+	if !strings.Contains(tf, "d7s.dev/managed-by: d7s") ||
+		!strings.Contains(tf, "d7s.dev/stack: week-one") ||
+		!strings.Contains(tf, "d7s.dev/component: orders-db") {
+		t.Errorf("Terraform CR does not carry the full ownership-label set:\n%s", tf)
+	}
+}
+
+// TestEmitManagedPlacementNeverInlinesAPIKey proves the emitted Terraform
+// CR and OpenTofu config never carry a literal Neon API key value
+// (golden rule 51): the key is always a Secret reference, resolved at
+// runner-pod runtime.
+func TestEmitManagedPlacementNeverInlinesAPIKey(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	tf := string(manifests.Files["apps/week-one/orders-db-terraform.yaml"])
+	if !strings.Contains(tf, "secretKeyRef") || !strings.Contains(tf, "name: neon-api-key") {
+		t.Errorf("Terraform CR does not inject the Neon API key from a Secret reference:\n%s", tf)
+	}
+	tfConfig := string(manifests.Files["apps/week-one/orders-db-managed/main.tf"])
+	if strings.Contains(tfConfig, "api_key") {
+		t.Errorf("OpenTofu config carries an api_key argument — the key must come only from the runner pod's environment:\n%s", tfConfig)
+	}
+}
+
+// TestEmitSelfHostedExampleUnaffectedByManagedPlacement proves adding the
+// managed-placement path did not change one byte of the existing
+// self-hosted golden output (no regression) — the same assertion as
+// TestEmitGoldenFiles, run again here to make the "no regression" claim
+// explicit at the point managed placement was introduced.
+func TestEmitSelfHostedExampleUnaffectedByManagedPlacement(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	want := readGoldenDir(t, filepath.Join("testdata", "golden", "week-one"))
+	if len(manifests.Files) != len(want) {
+		t.Fatalf("emitted %d files, golden has %d", len(manifests.Files), len(want))
+	}
+	for path, wantBytes := range want {
+		gotBytes, ok := manifests.Files[path]
+		if !ok {
+			t.Errorf("golden file %s was not emitted", path)
+			continue
+		}
+		if !bytes.Equal(gotBytes, wantBytes) {
+			t.Errorf("emitted %s differs from golden after adding managed placement:\n--- got ---\n%s\n--- want ---\n%s", path, gotBytes, wantBytes)
+		}
+	}
+}
+
 // unknownComponent is a domain.Component of a kind the flux emitter does
 // not implement, used to prove the unimplemented-kind path refuses
 // loudly (golden rule 34) instead of silently skipping it.

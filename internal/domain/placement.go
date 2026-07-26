@@ -6,12 +6,13 @@ package domain
 type Placement string
 
 const (
-	// PlacementSelfHosted compiles to the Flux/Kubernetes target — the
-	// only placement week one can honor.
+	// PlacementSelfHosted compiles to the Flux/CloudNativePG target.
 	PlacementSelfHosted Placement = "self-hosted"
-	// PlacementManaged is a reserved value: week one accepts it in the
-	// schema but always refuses to compile it (golden rule 34 — a
-	// schema-accepted field nothing consumes is a defect, so this one
-	// consumes it by refusing loudly, not by silently ignoring it).
+	// PlacementManaged compiles to the Flux/tofu-controller target,
+	// wrapping a Neon provider config (week-two plan, slices 2+3). A
+	// guarantee whose meaning cannot survive the placement change — mesh
+	// mTLS and the AuthorizationPolicy allow-list it depends on — refuses
+	// to compile against this placement instead of silently degrading
+	// (golden rules 34, 37, 50); see internal/domain/postgres.go.
 	PlacementManaged Placement = "managed"
 )
