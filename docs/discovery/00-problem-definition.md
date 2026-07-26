@@ -50,6 +50,14 @@ developers would consume the platform it builds with datascape?
 > *Open item (non-blocking, noted at sign-off):* the team's actual name and its
 > developer-customer count are not written down here. Record them (privately if the repo
 > is public) before the first dogfood week, so adoption claims have a denominator.
+>
+> *Answer (2026-07-26, owner, via steward decision round at dogfood start):* selected
+> **"Small team: 2–5 devs"**, then, asked for the exact figure, **"5 developers"** —
+> the adoption denominator is **5**. The team's actual name was requested in both
+> rounds and not provided; it remains the open sliver of this item, recorded here
+> rather than blocking the dogfood start the owner directed. *(Finding, not
+> reconciled: the sign-off note above asks for name AND count before the first
+> dogfood week — the count is now recorded, the name is not.)*
 
 **Q1.2 — What is the ONE job-to-be-done that datascape must nail?**
 Stated as a job, not a feature: "when I ___, I want to ___, so I can ___." What is the
