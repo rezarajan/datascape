@@ -4,7 +4,8 @@
 **Status: SIGNED OFF — 2026-07-25, by the owner, via kickoff questionnaire.
 Amended same day: Amendment 1 (guarantees-compiler reframing) and Amendment 2
 (trust-boundary model) — see end of document.
-Re-sign-off: SIGNED OFF — 2026-07-25, by the owner.**
+Re-sign-off: SIGNED OFF — 2026-07-26, by the owner, covering both amendments (see
+"Re-sign-off" section at the end of this document).**
 
 This document becomes the contract that authorizes solution work. It reaches
 **Signed off** only when every round below has recorded answers and the owner has
@@ -441,8 +442,8 @@ pair only), day-2 operation, TEE/confidential compute, developer self-serve.
 - Open items carried forward: team name/denominator (Q1.1a), managed-emit artifact
   choice (A2), and re-sign-off of this amendment by the owner.
 
-**Amendment status: recorded 2026-07-25; awaiting owner re-sign-off (one explicit
-confirmation that the amended problem statement above captures the intent).**
+**Amendment status: recorded 2026-07-25; RE-SIGNED-OFF 2026-07-26 (see "Re-sign-off"
+section at the end of this document).**
 
 ---
 
@@ -517,5 +518,33 @@ conditional guarantees; they never receive emitted infrastructure.
   declarations enter after week one, within v1.
 - Open items: unchanged from Amendment 1, plus none added — B1–B4 are closed.
 
-**Amendment status: recorded 2026-07-25; folded into the Amendment 1 re-sign-off (one
-owner confirmation covers the amended statement plus this boundary model).**
+**Amendment status: recorded 2026-07-25; RE-SIGNED-OFF 2026-07-26, folded into the
+Amendment 1 re-sign-off (see "Re-sign-off" section at the end of this document).**
+
+---
+
+## Re-sign-off — 2026-07-26
+
+**Finding (flagged, not reconciled):** a prior commit (`1248528`, 2026-07-25) flipped
+this document's top-line "Re-sign-off" status to SIGNED OFF without recording the
+owner's statement verbatim, without updating the Amendment 1 and Amendment 2 status
+footers (both still read "awaiting owner re-sign-off" as of that commit), and without
+updating the dependent status lines in `../README.md` and `../../CLAUDE.md`. That edit
+is superseded by the confirmation below, which completes the flip consistently across
+all four locations in one commit.
+
+### Owner statement (verbatim, 2026-07-26)
+
+> Problem-definition re-sign-off CONFIRMED, covering Amendment 1 (guarantees-compiler)
+> and Amendment 2 (trust-boundary). Flip the PENDING status header.
+
+### Decision
+
+Re-sign-off is **SIGNED OFF — 2026-07-26, by the owner**, covering Amendment 1
+(guarantees-compiler reframing) and Amendment 2 (trust-boundary model) as one
+confirmation, per the amendments' own terms (Amendment 1: "one explicit confirmation
+that the amended problem statement... captures the intent"; Amendment 2: "folded into
+the Amendment 1 re-sign-off"). The amended problem statement (end of Amendment 1) and
+the trust-boundary model (Amendment 2) are the authoritative scope. No further scope
+change accompanies this confirmation — it is a sign-off of what was already recorded,
+not a new amendment.
