@@ -465,6 +465,51 @@ func TestEmitWeekOneAndManagedExamplesUnaffectedByDurability(t *testing.T) {
 	}
 }
 
+// TestEmitExternalAloneEmitsNoBytes proves the emitter-level half of
+// problem definition Amendment 2's claim (asserted in doc comments at
+// internal/domain/external.go:11-13, internal/domain/stack_test.go's
+// TestStackValidateExternalAlone, and
+// internal/adapters/yaml/loader_test.go's
+// TestLoadExternalAloneEmitsNoComponentSideEffect, none of which reach
+// this package): an external declaration with no component referencing
+// it changes zero emitted bytes. Compares the exact same stack with and
+// without the declared external and requires byte-identical file sets —
+// not merely "no crash".
+func TestEmitExternalAloneEmitsNoBytes(t *testing.T) {
+	without := exampleStack()
+
+	withExternal := exampleStack()
+	withExternal.Externals = []domain.External{backupsExternal()}
+
+	gotWithout, err := flux.New().Emit(without)
+	if err != nil {
+		t.Fatalf("Emit (without external): %v", err)
+	}
+	gotWith, err := flux.New().Emit(withExternal)
+	if err != nil {
+		t.Fatalf("Emit (with unreferenced external): %v", err)
+	}
+
+	if len(gotWith.Files) != len(gotWithout.Files) {
+		t.Fatalf("declaring an unreferenced external changed the emitted file count: %d vs %d",
+			len(gotWith.Files), len(gotWithout.Files))
+	}
+	for path, wantBytes := range gotWithout.Files {
+		gotBytes, ok := gotWith.Files[path]
+		if !ok {
+			t.Errorf("file %s present without the external is missing with it declared", path)
+			continue
+		}
+		if !bytes.Equal(gotBytes, wantBytes) {
+			t.Errorf("file %s changed bytes when an unreferenced external was declared:\n--- without ---\n%s\n--- with ---\n%s",
+				path, wantBytes, gotBytes)
+		}
+	}
+	if len(gotWith.Conditionals) != 0 {
+		t.Errorf("expected no conditional-guarantee notices from an unreferenced external, got %+v", gotWith.Conditionals)
+	}
+}
+
 // managedExampleStack mirrors examples/week-two/managed-stack.yaml, which
 // in turn mirrors examples/week-one/stack.yaml with placement flipped to
 // managed and no guarantees.mtls/allowedConsumers/rpo declared — the seam

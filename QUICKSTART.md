@@ -120,7 +120,33 @@ Two ways to see the compiled output actually running, on a throwaway
   `NEON_API_KEY` (env var or a gitignored `./.env`) to deliver — there's no
   managed-placement path without one. `NEON_PROJECT_ID` is auto-discovered from the
   key, or set it yourself to override.
-- **`guarantees.rpo` currently refuses to compile, on every placement** — v1 has no
-  declarable backup destination yet. It's landing this week (see
-  `docs/plans/03-week-three.md`); until then, the compiler tells you as much and
-  names the remedy.
+- **`guarantees.rpo` compiles once it names a destination.** Declare an `external`
+  object store (v1's only shape: an S3-compatible endpoint/bucket, credentials as a
+  Secret reference — never inline) and point `guarantees.rpo.backupTo` at its name:
+
+  ```yaml
+  external:
+    - name: backups
+      objectStore:
+        endpoint: https://minio.d7s-harness.svc:9000
+        bucket: d7s-backups
+        credentials:
+          secretRef:
+            name: backups-credentials
+  components:
+    - kind: postgres
+      name: orders-db
+      placement: self-hosted
+      guarantees:
+        rpo:
+          target: 1h
+          backupTo: backups
+  ```
+
+  d7s never provisions or reaches into that store — it's outside what d7s compiled,
+  so the compiled Cluster and ScheduledBackup carry a `conditional-on-external`
+  label, and the compile summary prints the same notice: the durability claim is
+  only as strong as that external store's own guarantees. A bare `guarantees.rpo`
+  with no `backupTo`, or a `backupTo` naming an external you didn't declare, still
+  refuses to compile with the remedy in the error. `placement: managed` still
+  refuses `guarantees.rpo` outright — there's no destination wiring for it yet.
