@@ -5,3 +5,10 @@
 
 # Per-developer local overrides.
 .claude/settings.local.json
+
+# Go build artifacts.
+/d7s
+/bin/
+
+# Compile output (the acceptance scenario's `d7s compile -o ./out`).
+/out/
