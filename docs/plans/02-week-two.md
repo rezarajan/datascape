@@ -1,8 +1,9 @@
 # Week-two plan — the managed side of the seam pair
 
-**Class: Plan.** **Status: APPROVED as Revision 1 — 2026-07-26, by the owner, with
-one owner change (local Neon bootstrap; see "Approval round" below). Product code is
-authorized, scoped to this revision's slices and exit criteria.**
+**Class: Plan.** **Status: APPROVED — 2026-07-26, by the owner; current governing
+revision: Revision 4 (branch-per-stack; see the dated revision sections below —
+each supersedes what it names and no earlier text is erased). Product code is
+authorized, scoped to the current revision's slices and exit criteria.**
 
 Implements the managed half of the contract's single seam pair (amended problem
 definition: *placement is a declared binding; v1 proves exactly ONE seam pair —
@@ -217,7 +218,10 @@ key is locked to the pre-existing "datascape" project). The approved design
 compiled a project per stack. Put to the owner with three options; answer recorded
 verbatim: **"Branch-per-stack in your project (Recommended)"**.
 
-**Revision 4 synthesis (supersedes the managed emitter's resource set):**
+**Finding (flagged, resolved explicitly): this reverses the Revision 2 design's
+resource set (project-per-stack) with fuller information about the key's scope —
+both texts stand.** **Revision 4 synthesis (supersedes the managed emitter's
+resource set):**
 
 - **The Neon PROJECT is an environment prerequisite**, exactly like the Kubernetes
   cluster itself — d7s never creates or destroys it. The compiled resource set
@@ -237,3 +241,19 @@ verbatim: **"Branch-per-stack in your project (Recommended)"**.
   creation), and the exit criteria's "real Neon database" now reads: a real
   branch + database in the prerequisite project, provisioned and destroyed per
   harness run.
+
+## Owner decisions at slice-5 landing — 2026-07-26
+
+Recorded verbatim (one owner message, on unlocking GPG): *"forego the team name
+(it is immaterial to this project), and the second stack will be considered the
+managed case."*
+
+- **Dogfood note 2 source: the managed case.** **Finding (flagged): this reverses
+  the approval-round answer "Separate real request (Recommended)"** — recorded
+  above in this document; both texts stand. Consequence: the managed stack,
+  deployed as a persistent dogfood stack (per the approved teardown policy:
+  harness ephemeral, dogfood persists), becomes the second real stack for the
+  kill review; its demand evidence is the owner's designation rather than a
+  distinct request, and the kill review should read it as such.
+- The team-name decision belongs to the problem definition (Q1.1a) and is
+  recorded there as a struck item in its own contract commit.
