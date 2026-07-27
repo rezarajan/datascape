@@ -65,6 +65,12 @@ istio-install
 tofu-install
 git-source
 deliver-managed
+# The exact-host pin ceremony's second phase (pin-managed's own header
+# documents it): only after the Terraform CR is Ready does the live
+# endpoint host exist to pin, recompile, and redeliver - and only the
+# pinned revision compiles the exact-host ServiceEntry +
+# AuthorizationPolicy the probes below exercise.
+pin-managed
 probe-managed
 
 log "managed acceptance scenario PASSED"

@@ -88,6 +88,13 @@ export OBJECT_STORE_CREDENTIALS_SECRET_NAME="${OBJECT_STORE_CREDENTIALS_SECRET_N
 # mirrors stack.yaml with only placement flipped, the seam proof's whole
 # point) never collide.
 export MANAGED_STACK="${MANAGED_STACK:-examples/week-two/managed-stack.yaml}"
+# The exact-host pin ceremony's FIRST phase (the same ceremony both
+# example files document in their own header comments): the unpinned
+# declaration is what compile-managed compiles and deliver-managed
+# delivers, because the real endpoint host does not exist until
+# tofu-controller provisions it. pin-managed then materializes the
+# pinned phase from MANAGED_STACK with the live host and redelivers.
+export MANAGED_STACK_UNPINNED="${MANAGED_STACK_UNPINNED:-examples/week-two/managed-stack-unpinned.yaml}"
 export MANAGED_OUT="${MANAGED_OUT:-./out-managed}"
 export MANAGED_CLUSTER_NAME="${MANAGED_CLUSTER_NAME:-d7s-acceptance-managed}"
 # The namespace/Kustomization name examples/week-two/managed-stack.yaml's

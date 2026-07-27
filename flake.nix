@@ -215,6 +215,17 @@
 
           probe-managed = action "probe-managed" (with pkgs; [ kubectl coreutils ]) ./scripts/actions/probe-managed.sh;
 
+          pin-managed = action "pin-managed"
+            (with pkgs; [
+              kubectl
+              fluxcd
+              gnused
+              coreutils
+              compile-and-verify
+              git-source
+            ])
+            ./scripts/actions/pin-managed.sh;
+
           teardown-managed = action "teardown-managed"
             (with pkgs; [
               kubectl
@@ -237,6 +248,7 @@
               istio-install
               git-source
               deliver-managed
+              pin-managed
               probe-managed
               teardown-managed
             ])
