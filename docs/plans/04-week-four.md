@@ -160,7 +160,47 @@ standard modes, with the known eBPF-mode probe caveats documented). The
 community pattern is treated as unverified until our own probes prove it live
 (rule 58).
 
-## Explicitly NOT this week (deferred with a home)
+## Control-plane-edge round — 2026-07-27 (→ Revision 4: apiserver edge compiled)
+
+The floor's first live contact (CI runs 30254082510/30270332686 + two local
+reproductions; full evidence chain in TASK_PROGRESS, 2026-07-27 sections)
+produced two findings:
+
+1. **Revision 3's enforcement premise was half wrong, in both directions.**
+   "kind ≥ v0.24 enforces natively" is FALSE for plain pods (probe: full floor
+   applied, external egress and apiserver both reachable from a non-ambient
+   pod) — but the floor IS enforced for ambient-captured pods, at the mesh
+   dataplane (mutation matrix: policies present → every egress attempt from an
+   ambient pod dies at the 10s connect deadline; absent → 200 in 5ms; waypoint,
+   ServiceEntry, AuthorizationPolicy, Gateway API CRDs each exonerated). Since
+   every d7s-compiled namespace with a mesh guarantee is ambient, the floor is
+   live exactly where it matters, regardless of CNI — and the CNI prerequisite
+   line above overstated what stock kind provides for anything off-mesh.
+2. **The floor fails closed against d7s's own operator-managed pods**: CNPG's
+   initdb bootstrap needs the kube-apiserver (host-network endpoint — no
+   NetworkPolicy pod/namespace selector can name it), so the Cluster never
+   leaves "Setting up primary." Same finding class as the tf-runner
+   control-plane edge (slice 1): the apiserver edge IS declared wiring implied
+   by operator-on-k8s placement.
+
+**Owner decisions, verbatim (2026-07-27, steward question round):** *"Compile
+pod+port-scoped edge (Recommended)"* — an egress allowance for TCP 6443+443
+scoped by podSelector to the component's own operator-managed pods, implied by
+placement, no schema change; precision limit (destination-broad on those ports
+for those pods) disclosed, same philosophy as Revision 2's exact-host pinning.
+And *"Land now via implementer (Recommended)"* — emitter + goldens + tests land
+from the steward session; the held slice-3 WIP rebases on top.
+
+**Revision 4 synthesis:** the NetworkPolicy floor gains one compiled object per
+component whose placement implies a control-plane relationship: allow-egress on
+TCP 6443 and 443, podSelector-scoped to that component's pods (CNPG instance
+pods for self-hosted; the tf-runner pods for managed, extending slice 1's
+already-recognized provisioner edge down to the floor layer). Rejected:
+schema-knob apiserver endpoint (precise but new per-cluster schema surface —
+available later as tightening); CNI-exemption reliance (refuted by evidence —
+the mesh dataplane enforces regardless of CNI; assuming exemption is a
+best-effort tier, rules 37/50); excluding operator pods from the floor (removes
+deny-by-default from the data-bearing pods themselves).
 
 Boundary probes beyond egress (import ceremony, v2+); compiled MinIO/object-store
 component (skeleton, owner-affirmed at week-three approval); attestation /
