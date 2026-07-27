@@ -644,6 +644,43 @@ broken against this docker/containerd combination in both kind v0.31/v0.32
 (containerd config v4 / digest-import errors) — crictl pull inside the node is
 the working warm-up path.
 
+## SLICE 3 LANDED — CI fully green, both scenarios (2026-07-27)
+
+Owner directive "Move this forward" executed directly in the main session
+(the held WIP was never pushed; slice 3 re-derived from the plan and live
+evidence — the WIP branch decision above is superseded by this landing;
+anything unique in that working copy is now reference-only). Landed, each
+step CI- or live-verified before the next:
+
+- `0c6cebf` orchestrator isolation (per-name lock, conformance-tested both
+  directions, + private kubeconfig — the concurrent-run collision class) and
+  istio-install wired into the managed scenario; `a0df3a6` its flake input.
+- `dfd9fcd` **the day's deepest defect**: the compiled allow-waypoint-egress
+  selected `istio.io/gateway-name` — a label istiod 1.30.3 does not apply
+  (real: `gateway.networking.k8s.io/gateway-name`) — so every waypoint sat
+  under the deny floor with no egress: it accepted HBONE streams and had its
+  own dial denied (both black-hole signatures of the day). Proven live both
+  directions on a clean cluster: tf-runner identity reaches
+  console.neon.tech (401 — path open), undeclared identity DENIED at the
+  waypoint's AuthorizationPolicy (slice 3's negative identity leg,
+  demonstrated).
+- `aab4d64` the exact-host pin ceremony in the harness: phase-one unpinned
+  compile+deliver, new pin-managed action (read live host from the
+  written-outputs secret → materialize pinned declaration → recompile →
+  republish → wait), probe-managed runs as the declared consumer's own
+  ServiceAccount and gains the undeclared-identity negative leg.
+- `abdb790` git-source clean-slates the served repo per publish (tar-overlay
+  merged unrelated histories; source-controller kept the stale revision) and
+  pin-managed waits on the artifact revision actually changing.
+
+**CI run 30302010004: ALL FOUR JOBS GREEN** — fast tier, quickstart,
+acceptance (kind), acceptance (managed/neon). First fully green CI under the
+mesh-mandatory posture and enforced floor: both placements, both guarantee
+families, the pin ceremony end to end, positive AND negative probes in both
+scenarios. Remaining for week four: slice 4 (QUICKSTART isolation +
+WALKTHROUGH.md incl. the ceremony, istiod-HPA note, CNI/Gateway-API
+prerequisites) and the exit-criteria checkoff.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
