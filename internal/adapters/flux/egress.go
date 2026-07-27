@@ -366,17 +366,42 @@ func emitEgress(files map[string][]byte, stackName string, selfHosted, managed [
 	if err != nil {
 		return false, err
 	}
+	// Cluster-local external endpoints (a "<svc>.<ns>.svc" host — the
+	// harness's in-cluster MinIO, the dev/prod-parity simulation pattern
+	// the owner approved at week-two Revision 1) get NO ServiceEntry, NO
+	// egress AuthorizationPolicy, and count toward no waypoint. Proven
+	// live, 2026-07-27 (TASK_PROGRESS): istiod PRUNES a ServiceEntry
+	// whose host duplicates a real in-cluster Service ("pruned by
+	// deduplication"), so the waypoint never gets a route for it — while
+	// ztunnel still redirects the SE's VIP into that waypoint, black-
+	// holing the declared data path (bytes_recv=0, 10s deadline, barman
+	// exit 4; WAL archiving recovered within seconds of dropping the
+	// use-waypoint label). Emitting the pair anyway would be an inert
+	// safety object (rule 37's no-best-effort tier, and the platformctl
+	// death class). The compiled containment for this case is the
+	// floor's declared-wiring edge (networkpolicy.go,
+	// emitDeclaredExternalEgress): source pinned to the wiring
+	// component's pods, destination pinned to the endpoint's namespace
+	// and declared port — L4 containment, disclosed as such; the full
+	// mesh-identity gate applies only to genuinely external hosts, where
+	// it actually programs.
+	var meshBackupTargets []backupEgressTarget
+	for _, t := range backupTargets {
+		if _, local := clusterLocalNamespace(t.Host); !local {
+			meshBackupTargets = append(meshBackupTargets, t)
+		}
+	}
 	neonTargets := neonEgressTargets(managed)
 	needsControlPlane := len(managed) > 0
 
-	if len(backupTargets) == 0 && len(neonTargets) == 0 && !needsControlPlane {
+	if len(meshBackupTargets) == 0 && len(neonTargets) == 0 && !needsControlPlane {
 		return false, nil
 	}
 
 	if err := emitWaypoint(files, stackName); err != nil {
 		return false, err
 	}
-	for _, t := range backupTargets {
+	for _, t := range meshBackupTargets {
 		if err := emitBackupEgress(files, stackName, t); err != nil {
 			return false, err
 		}

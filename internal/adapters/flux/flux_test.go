@@ -205,6 +205,22 @@ func backupsExternal() domain.External {
 	}
 }
 
+// offClusterBackupsExternal is backupsExternal with a genuinely external
+// (non-".svc") endpoint host — the case that still compiles the full
+// mesh-identity gate (ServiceEntry + AuthorizationPolicy + waypoint)
+// after the cluster-local carve-out (egress.go's emitEgress doc comment,
+// live-proven 2026-07-27).
+func offClusterBackupsExternal() domain.External {
+	return domain.External{
+		Name: "backups",
+		ObjectStore: &domain.ObjectStoreExternal{
+			Endpoint:    "https://s3.example.com:9443",
+			Bucket:      "d7s-backups",
+			Credentials: domain.SecretRef{Name: "backups-credentials"},
+		},
+	}
+}
+
 // TestEmitWithoutRPOGuaranteeEmitsNoBackupObjects mirrors the mTLS case
 // for durability: no ScheduledBackup and no Cluster.spec.backup unless
 // the RPO guarantee is declared — and, since presence is the only signal
@@ -963,9 +979,14 @@ func TestEmitSelfHostedExampleUnaffectedByManagedPlacement(t *testing.T) {
 // component's CNPG-created ServiceAccount — nothing wider, and the
 // attachment is via targetRefs (a ServiceEntry has no workload labels a
 // selector could match), enforced by the waypoint the ServiceEntry
-// declares istio.io/use-waypoint for.
+// declares istio.io/use-waypoint for. Applies to genuinely external
+// hosts only — cluster-local endpoints skip this gate entirely (the
+// carve-out proven live 2026-07-27; see
+// TestEmitClusterLocalExternalSkipsMeshGate).
 func TestEmitBackupEgressAuthorizesOnlyDeclaredConsumers(t *testing.T) {
-	manifests, err := flux.New().Emit(exampleStack())
+	stack := exampleStack()
+	stack.Externals = []domain.External{offClusterBackupsExternal()}
+	manifests, err := flux.New().Emit(stack)
 	if err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
@@ -975,9 +996,9 @@ func TestEmitBackupEgressAuthorizesOnlyDeclaredConsumers(t *testing.T) {
 		"name: backups",
 		"istio.io/use-waypoint: waypoint",
 		"hosts:",
-		"- minio.d7s-harness-minio.svc",
+		"- s3.example.com",
 		"location: MESH_EXTERNAL",
-		`number: 9000`,
+		`number: 9443`,
 		"protocol: TCP",
 		"resolution: DNS",
 	} {
@@ -996,6 +1017,35 @@ func TestEmitBackupEgressAuthorizesOnlyDeclaredConsumers(t *testing.T) {
 	}
 	if strings.Contains(authz, "selector:") {
 		t.Errorf("backups AuthorizationPolicy uses a workload selector — a ServiceEntry has no workload to select:\n%s", authz)
+	}
+}
+
+// TestEmitClusterLocalExternalSkipsMeshGate proves the cluster-local
+// carve-out (egress.go, emitEgress doc comment — live-proven
+// 2026-07-27): an external whose endpoint host is an in-cluster Service
+// DNS name compiles NO ServiceEntry, NO egress AuthorizationPolicy, and
+// no waypoint on its account — istiod prunes such a ServiceEntry by
+// deduplication against the real Service while ztunnel still redirects
+// its VIP into the unprogrammed waypoint, black-holing the declared data
+// path. The compiled containment is the floor's declared-wiring edge
+// instead (TestEmitDeclaredExternalEgressScopesClusterLocalEndpoint).
+func TestEmitClusterLocalExternalSkipsMeshGate(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for _, absent := range []string{
+		"apps/week-one/backups-serviceentry.yaml",
+		"apps/week-one/backups-egress-authorizationpolicy.yaml",
+		"apps/week-one/waypoint.yaml",
+		"apps/week-one/networkpolicy-allow-waypoint-egress.yaml",
+	} {
+		if _, ok := manifests.Files[absent]; ok {
+			t.Errorf("%s must not be compiled for a cluster-local external endpoint (inert/black-holing mesh object)", absent)
+		}
+	}
+	if _, ok := manifests.Files["apps/week-one/orders-db-backups-networkpolicy-declared-egress.yaml"]; !ok {
+		t.Error("the floor's declared-wiring edge must be compiled as the cluster-local containment")
 	}
 }
 
@@ -1026,7 +1076,7 @@ func TestEmitWaypointSharedAcrossBackupAndNeonEgress(t *testing.T) {
 				},
 			},
 		},
-		Externals: []domain.External{backupsExternal()},
+		Externals: []domain.External{offClusterBackupsExternal()},
 	}
 	manifests, err := flux.New().Emit(stack)
 	if err != nil {
@@ -1283,7 +1333,14 @@ func TestEmitNetworkPolicyFloorForMeshEnrolledNamespace(t *testing.T) {
 		}
 	}
 
-	waypointPolicy := string(manifests.Files["apps/week-one/networkpolicy-allow-waypoint-egress.yaml"])
+	// The waypoint grant is asserted on the managed fixture — the
+	// cluster-local carve-out (2026-07-27) removed week-one's waypoint,
+	// so the example stack no longer compiles one.
+	managedManifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (managed): %v", err)
+	}
+	waypointPolicy := string(managedManifests.Files["apps/week-one/networkpolicy-allow-waypoint-egress.yaml"])
 	if !strings.Contains(waypointPolicy, "istio.io/gateway-name: waypoint") {
 		t.Errorf("allow-waypoint-egress does not select the waypoint pod:\n%s", waypointPolicy)
 	}
@@ -1377,8 +1434,8 @@ func TestEmitNetworkPoliciesCarryOwnershipLabels(t *testing.T) {
 	for _, path := range []string{
 		"apps/week-one/networkpolicy-default-deny-egress.yaml",
 		"apps/week-one/networkpolicy-allow-cluster-egress.yaml",
-		"apps/week-one/networkpolicy-allow-waypoint-egress.yaml",
 		"apps/week-one/orders-db-networkpolicy-controlplane-egress.yaml",
+		"apps/week-one/orders-db-backups-networkpolicy-declared-egress.yaml",
 	} {
 		np := string(manifests.Files[path])
 		if !strings.Contains(np, "d7s.dev/managed-by: d7s") || !strings.Contains(np, "d7s.dev/stack: week-one") {
