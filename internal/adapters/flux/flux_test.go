@@ -1214,6 +1214,143 @@ func TestEmitManagedPlacementAlwaysCompilesControlPlaneEgress(t *testing.T) {
 	}
 }
 
+// TestEmitNetworkPolicyFloorForMeshEnrolledNamespace proves the
+// Enforcement round's deny floor (week-four plan, Revision 3, Mechanism
+// correction, 2026-07-27): a mesh-enrolled namespace (mtls declared here)
+// compiles all three NetworkPolicy objects — default-deny-egress with NO
+// egress rules at all, allow-cluster-egress naming DNS (kube-system,
+// UDP/TCP 53), istiod (istio-system, TCP 15012), same-namespace pods (an
+// unrestricted podSelector: {} peer), and the HBONE tunnel port (15008,
+// deliberately no peer restriction — see hbonePort's doc comment in
+// networkpolicy.go), and allow-waypoint-egress scoped to exactly the
+// waypoint's own pod label with a fully open egress rule.
+func TestEmitNetworkPolicyFloorForMeshEnrolledNamespace(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+
+	deny := string(manifests.Files["apps/week-one/networkpolicy-default-deny-egress.yaml"])
+	if !strings.Contains(deny, "podSelector: {}") || !strings.Contains(deny, "- Egress") {
+		t.Errorf("default-deny-egress does not select every pod for Egress:\n%s", deny)
+	}
+	if strings.Contains(deny, "egress:") {
+		t.Errorf("default-deny-egress must carry no egress rules at all (the deny floor itself):\n%s", deny)
+	}
+
+	allow := string(manifests.Files["apps/week-one/networkpolicy-allow-cluster-egress.yaml"])
+	for _, want := range []string{
+		"kubernetes.io/metadata.name: kube-system",
+		"protocol: UDP\n          port: 53",
+		"protocol: TCP\n          port: 53",
+		"kubernetes.io/metadata.name: istio-system",
+		"port: 15012",
+		"- podSelector: {}",
+		"port: 15008",
+	} {
+		if !strings.Contains(allow, want) {
+			t.Errorf("allow-cluster-egress missing %q:\n%s", want, allow)
+		}
+	}
+
+	waypointPolicy := string(manifests.Files["apps/week-one/networkpolicy-allow-waypoint-egress.yaml"])
+	if !strings.Contains(waypointPolicy, "istio.io/gateway-name: waypoint") {
+		t.Errorf("allow-waypoint-egress does not select the waypoint pod:\n%s", waypointPolicy)
+	}
+	if !strings.Contains(waypointPolicy, "egress:\n    - {}") {
+		t.Errorf("allow-waypoint-egress does not grant fully open egress:\n%s", waypointPolicy)
+	}
+}
+
+// TestEmitNetworkPoliciesCarryOwnershipLabels proves all three compiled
+// NetworkPolicy objects carry the standard d7s.dev/* ownership labels
+// (golden rule 27) exactly like every other emitted object.
+func TestEmitNetworkPoliciesCarryOwnershipLabels(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for _, path := range []string{
+		"apps/week-one/networkpolicy-default-deny-egress.yaml",
+		"apps/week-one/networkpolicy-allow-cluster-egress.yaml",
+		"apps/week-one/networkpolicy-allow-waypoint-egress.yaml",
+	} {
+		np := string(manifests.Files[path])
+		if !strings.Contains(np, "d7s.dev/managed-by: d7s") || !strings.Contains(np, "d7s.dev/stack: week-one") {
+			t.Errorf("%s does not carry the full ownership-label set:\n%s", path, np)
+		}
+	}
+}
+
+// TestEmitNetworkPolicyAbsentWithoutMeshEnrollment proves the deny floor
+// is scoped exactly to mesh-enrolled namespaces (the existing
+// mtlsEnabled||egressNeeded gating, week-four plan Revision 3): a
+// self-hosted component declaring neither guarantees.mtls nor
+// guarantees.rpo never joins the ambient mesh, so compiling a
+// NetworkPolicy for it would restrict a namespace the mesh was never
+// asked to protect in the first place.
+func TestEmitNetworkPolicyAbsentWithoutMeshEnrollment(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for path := range manifests.Files {
+		if strings.HasPrefix(filepath.Base(path), "networkpolicy-") {
+			t.Errorf("emitted %s without mesh enrollment (no mtls, no rpo, no managed component)", path)
+		}
+	}
+}
+
+// TestEmitNetworkPolicyOmitsWaypointGrantWithoutAWaypoint proves the
+// waypoint-scoped policy is never a dangling reference (golden rule 24's
+// spirit, threaded from emitEgress's own return value): a component that
+// declares guarantees.mtls but neither guarantees.rpo nor any managed
+// component's egress wiring joins the ambient mesh (so the floor and the
+// fixed cluster allowance DO compile) without ever compiling a waypoint
+// object — the waypoint-scoped grant must not exist either, since it
+// would otherwise select a pod label nothing in this stack carries.
+func TestEmitNetworkPolicyOmitsWaypointGrantWithoutAWaypoint(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				Guarantees: domain.Guarantees{
+					MTLS: &domain.MTLSGuarantee{},
+				},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	if _, ok := manifests.Files["apps/week-one/waypoint.yaml"]; ok {
+		t.Fatal("test fixture assumption broken: this stack now compiles a waypoint, invalidating the scenario")
+	}
+	if _, ok := manifests.Files["apps/week-one/networkpolicy-default-deny-egress.yaml"]; !ok {
+		t.Error("expected default-deny-egress to compile — guarantees.mtls alone enrolls the namespace in the mesh")
+	}
+	if _, ok := manifests.Files["apps/week-one/networkpolicy-allow-cluster-egress.yaml"]; !ok {
+		t.Error("expected allow-cluster-egress to compile alongside the deny floor")
+	}
+	if _, ok := manifests.Files["apps/week-one/networkpolicy-allow-waypoint-egress.yaml"]; ok {
+		t.Error("emitted allow-waypoint-egress with no waypoint in the stack to grant it to — a dangling selector")
+	}
+}
+
 // TestEmitEgressRefusesObjectStoreEndpointWithoutExplicitPort proves
 // egress compilation's own compile-time check (rule 49's "shown able to
 // fail and pass" spirit): a declared external whose endpoint has no

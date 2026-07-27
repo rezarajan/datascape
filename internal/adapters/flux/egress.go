@@ -355,38 +355,43 @@ func neonEgressTargets(managed []domain.Postgres) []domain.Postgres {
 // own control-plane edge (neonControlPlaneHost's doc comment: a managed
 // component's Terraform CR always calls Neon's API to provision it, so
 // that edge is implied by placement: managed itself, not by
-// allowedConsumers).
-func emitEgress(files map[string][]byte, stackName string, selfHosted, managed []domain.Postgres, externalsByName map[string]domain.External) error {
+// allowedConsumers). Returns whether a waypoint was actually compiled
+// (Enforcement round, Revision 3): networkpolicy.go's caller (Emit) uses
+// this so the waypoint-scoped NetworkPolicy is only ever emitted
+// alongside a waypoint that genuinely exists — never a dangling
+// reference to a pod selector matching nothing (golden rule 24's
+// spirit).
+func emitEgress(files map[string][]byte, stackName string, selfHosted, managed []domain.Postgres, externalsByName map[string]domain.External) (bool, error) {
 	backupTargets, err := backupEgressTargets(selfHosted, externalsByName)
 	if err != nil {
-		return err
+		return false, err
 	}
 	neonTargets := neonEgressTargets(managed)
 	needsControlPlane := len(managed) > 0
 
 	if len(backupTargets) == 0 && len(neonTargets) == 0 && !needsControlPlane {
-		return nil
+		return false, nil
 	}
 
 	if err := emitWaypoint(files, stackName); err != nil {
-		return err
+		return false, err
 	}
 	for _, t := range backupTargets {
 		if err := emitBackupEgress(files, stackName, t); err != nil {
-			return err
+			return false, err
 		}
 	}
 	for _, pg := range neonTargets {
 		if err := emitNeonEgress(files, stackName, pg); err != nil {
-			return err
+			return false, err
 		}
 	}
 	if needsControlPlane {
 		if err := emitNeonControlPlaneEgress(files, stackName); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // emitWaypoint compiles the one waypoint proxy a stack namespace needs

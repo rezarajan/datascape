@@ -184,8 +184,14 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 			return ports.Manifests{}, err
 		}
 	}
-	if err := emitEgress(files, stack.Name, selfHosted, managed, externalsByName); err != nil {
+	waypointPresent, err := emitEgress(files, stack.Name, selfHosted, managed, externalsByName)
+	if err != nil {
 		return ports.Manifests{}, err
+	}
+	if appMeshEnabled {
+		if err := emitNetworkPolicies(files, stack.Name, waypointPresent); err != nil {
+			return ports.Manifests{}, err
+		}
 	}
 	if total > 0 {
 		if err := emitAppKustomization(files, stack.Name, len(selfHosted) > 0); err != nil {
