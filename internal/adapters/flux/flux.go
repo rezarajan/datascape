@@ -113,12 +113,42 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 	}
 	total := len(selfHosted) + len(managed)
 
-	meshEnabled := false
+	// mtlsEnabled gates the CNPG operator's own ambient enrollment and
+	// the PeerAuthentication/selector-AuthorizationPolicy triple
+	// (unchanged this week — see emitCNPGOperator, emitZeroTrust): the
+	// operator's status-polling connection only needs mesh membership to
+	// survive a STRICT PeerAuthentication this stack itself declares.
+	//
+	// egressNeeded is a separate, wider trigger the week-four plan adds:
+	// a declared external backup destination or a managed component's
+	// declared consumers both need their OWN traffic (never the
+	// operator's) to leave through the mesh's waypoint-enforced egress
+	// path (egress.go) — that requires the APP namespace's own ambient
+	// enrollment regardless of whether guarantees.mtls is declared at
+	// all (the durability-only and managed-consumer scenarios the plan's
+	// Finding names: "the self-hosted scenario's unmediated backup egress
+	// to MinIO" and "the managed scenario ... probe dialing Neon
+	// directly" — both previously ran with no mesh in the path, the
+	// contract gap this plan closes). The app namespace's own ambient
+	// label is therefore driven by EITHER condition; the CNPG operator's
+	// is driven only by mtlsEnabled, since egress traffic never touches
+	// the operator's own control-plane connection.
+	mtlsEnabled := false
+	egressNeeded := false
 	for _, pg := range selfHosted {
 		if pg.Guarantees.MTLS != nil {
-			meshEnabled = true
+			mtlsEnabled = true
+		}
+		if pg.Guarantees.RPO != nil {
+			egressNeeded = true
 		}
 	}
+	for _, pg := range managed {
+		if len(pg.AllowedConsumers) > 0 {
+			egressNeeded = true
+		}
+	}
+	appMeshEnabled := mtlsEnabled || egressNeeded
 
 	externalsByName := make(map[string]domain.External, len(stack.Externals))
 	for _, ext := range stack.Externals {
@@ -127,12 +157,12 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 
 	files := map[string][]byte{}
 	if len(selfHosted) > 0 {
-		if err := emitCNPGOperator(files, meshEnabled); err != nil {
+		if err := emitCNPGOperator(files, mtlsEnabled); err != nil {
 			return ports.Manifests{}, err
 		}
 	}
 	if total > 0 {
-		if err := emitAppNamespace(files, stack.Name, meshEnabled); err != nil {
+		if err := emitAppNamespace(files, stack.Name, appMeshEnabled); err != nil {
 			return ports.Manifests{}, err
 		}
 	}
@@ -154,6 +184,9 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 			return ports.Manifests{}, err
 		}
 	}
+	if err := emitEgress(files, stack.Name, selfHosted, managed, externalsByName); err != nil {
+		return ports.Manifests{}, err
+	}
 	if total > 0 {
 		if err := emitAppKustomization(files, stack.Name, len(selfHosted) > 0); err != nil {
 			return ports.Manifests{}, err
@@ -164,10 +197,13 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 
 // emitAppNamespace emits the stack's application namespace once.
 // meshEnabled adds the Istio ambient dataplane label: without it,
-// ztunnel never intercepts the namespace's traffic and a declared mtls
-// guarantee would compile PeerAuthentication/AuthorizationPolicy objects
-// that exist but are never enforced (found by running the acceptance
-// harness against a live ambient mesh, not assumed — golden rule 40).
+// ztunnel never intercepts the namespace's traffic — not a declared mtls
+// guarantee's PeerAuthentication/AuthorizationPolicy (found by running
+// the acceptance harness against a live ambient mesh, not assumed —
+// golden rule 40), and, as of week-four plan slice 1, not a declared
+// egress ServiceEntry's waypoint-enforced AuthorizationPolicy either —
+// either would otherwise compile objects that exist but are never
+// enforced. The caller (Emit) sets this true for either trigger.
 func emitAppNamespace(files map[string][]byte, stackName string, meshEnabled bool) error {
 	labels := ownershipLabels(stackName, "")
 	if meshEnabled {
@@ -318,7 +354,7 @@ func emitZeroTrust(files map[string][]byte, stackName string, pg domain.Postgres
 			Labels:    ownershipLabels(stackName, pg.Name),
 		},
 		Spec: AuthorizationPolicySpec{
-			Selector: AuthorizationPolicySelector{
+			Selector: &AuthorizationPolicySelector{
 				MatchLabels: map[string]string{"cnpg.io/cluster": pg.Name},
 			},
 			Rules: rules,

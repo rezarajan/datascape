@@ -8,3 +8,5 @@ components:
     credentials:
       secretRef:
         name: orders-db-app
+    allowedConsumers:
+      - serviceAccount: probe-client

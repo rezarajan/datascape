@@ -5,3 +5,4 @@ metadata:
   labels:
     d7s.dev/managed-by: d7s
     d7s.dev/stack: week-three
+    istio.io/dataplane-mode: ambient

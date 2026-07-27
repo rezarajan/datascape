@@ -34,9 +34,34 @@ type AuthorizationPolicy struct {
 // workload — Istio's documented default-deny shape; non-empty Rules
 // allow only the principals compiled from declared wiring (golden
 // rule 53).
+//
+// Selector and TargetRefs are mutually exclusive attachment shapes, both
+// carried here as a pointer/slice so only one is ever marshaled per
+// policy (never both — zero-value omits it). Selector matches an
+// in-mesh workload by label, ztunnel's own L4 enforcement path
+// (mtls.go's zero-trust triple, unchanged this week). TargetRefs
+// attaches to a specific named resource instead — the shape egress
+// compilation needs (egress.go, week-four plan slice 1): a declared
+// external endpoint is a ServiceEntry, not a workload with labels to
+// select, and Istio's own docs (istio.io/latest/docs/reference/config/
+// security/authorization-policy/, verified 2026-07-26) document
+// `kind: ServiceEntry, group: networking.istio.io` as a supported
+// targetRefs attachment, enforced by the waypoint the ServiceEntry is
+// bound to (see egress.go's doc comments for the full chain).
 type AuthorizationPolicySpec struct {
-	Selector AuthorizationPolicySelector `yaml:"selector"`
-	Rules    []AuthorizationPolicyRule   `yaml:"rules"`
+	Selector   *AuthorizationPolicySelector   `yaml:"selector,omitempty"`
+	TargetRefs []AuthorizationPolicyTargetRef `yaml:"targetRefs,omitempty"`
+	Rules      []AuthorizationPolicyRule      `yaml:"rules"`
+}
+
+// AuthorizationPolicyTargetRef is one entry of
+// AuthorizationPolicy.spec.targetRefs: attaches the policy to a named
+// resource (here, always a ServiceEntry) rather than a workload
+// selector — egress.go's attachment shape.
+type AuthorizationPolicyTargetRef struct {
+	Group string `yaml:"group"`
+	Kind  string `yaml:"kind"`
+	Name  string `yaml:"name"`
 }
 
 // AuthorizationPolicySelector is AuthorizationPolicy.spec.selector.

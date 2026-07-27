@@ -536,9 +536,12 @@ func TestEmitExternalAloneEmitsNoBytes(t *testing.T) {
 
 // managedExampleStack mirrors examples/week-two/managed-stack.yaml, which
 // in turn mirrors examples/week-one/stack.yaml with placement flipped to
-// managed and no guarantees.mtls/allowedConsumers/rpo declared — the seam
-// proof shape (week-two plan, slices 2+3): the same declaration, only
-// placement flipped, compiles to a different artifact.
+// managed and no guarantees.mtls/rpo declared (both still refuse on
+// managed placement) — the seam proof shape (week-two plan, slices 2+3):
+// the same declaration, only placement flipped, compiles to a different
+// artifact. AllowedConsumers is declared (week-four plan, slice 2's
+// un-refusal): egress compilation now gives it an enforcement point on
+// managed placement too (internal/adapters/flux/egress.go).
 func managedExampleStack() domain.Stack {
 	return domain.Stack{
 		Name: "week-one",
@@ -547,6 +550,9 @@ func managedExampleStack() domain.Stack {
 				Name:        "orders-db",
 				Placement:   domain.PlacementManaged,
 				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				AllowedConsumers: []domain.AllowedConsumer{
+					{ServiceAccount: "probe-client"},
+				},
 			},
 		},
 	}
@@ -852,6 +858,206 @@ func TestEmitSelfHostedExampleUnaffectedByManagedPlacement(t *testing.T) {
 		if !bytes.Equal(gotBytes, wantBytes) {
 			t.Errorf("emitted %s differs from golden after adding managed placement:\n--- got ---\n%s\n--- want ---\n%s", path, gotBytes, wantBytes)
 		}
+	}
+}
+
+// TestEmitBackupEgressAuthorizesOnlyDeclaredConsumers proves the declared
+// backup wiring IS the allow-list (week-four plan, slice 1): the
+// ServiceEntry names exactly the declared external's resolved host/port,
+// and its AuthorizationPolicy's principals name exactly the consuming
+// component's CNPG-created ServiceAccount — nothing wider, and the
+// attachment is via targetRefs (a ServiceEntry has no workload labels a
+// selector could match), enforced by the waypoint the ServiceEntry
+// declares istio.io/use-waypoint for.
+func TestEmitBackupEgressAuthorizesOnlyDeclaredConsumers(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	se := string(manifests.Files["apps/week-one/backups-serviceentry.yaml"])
+	for _, want := range []string{
+		"kind: ServiceEntry",
+		"name: backups",
+		"istio.io/use-waypoint: waypoint",
+		"hosts:",
+		"- minio.d7s-harness-minio.svc",
+		"location: MESH_EXTERNAL",
+		`number: 9000`,
+		"protocol: TCP",
+		"resolution: DNS",
+	} {
+		if !strings.Contains(se, want) {
+			t.Errorf("backups ServiceEntry missing %q:\n%s", want, se)
+		}
+	}
+	authz := string(manifests.Files["apps/week-one/backups-egress-authorizationpolicy.yaml"])
+	if !strings.Contains(authz, "targetRefs:") ||
+		!strings.Contains(authz, "kind: ServiceEntry") ||
+		!strings.Contains(authz, "name: backups") {
+		t.Errorf("backups AuthorizationPolicy does not attach via targetRefs to the ServiceEntry:\n%s", authz)
+	}
+	if !strings.Contains(authz, "cluster.local/ns/week-one/sa/orders-db") {
+		t.Errorf("backups AuthorizationPolicy does not authorize the consuming component's own ServiceAccount:\n%s", authz)
+	}
+	if strings.Contains(authz, "selector:") {
+		t.Errorf("backups AuthorizationPolicy uses a workload selector — a ServiceEntry has no workload to select:\n%s", authz)
+	}
+}
+
+// TestEmitWaypointSharedAcrossBackupAndNeonEgress proves exactly one
+// waypoint compiles per namespace even when both a self-hosted
+// component's backup egress and a managed component's Neon egress are
+// declared in the same stack — not one per egress target (week-four
+// plan, slice 1's doc comment on emitWaypoint).
+func TestEmitWaypointSharedAcrossBackupAndNeonEgress(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				Guarantees: domain.Guarantees{
+					RPO: &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"},
+				},
+			},
+			domain.Postgres{
+				Name:        "widgets-db",
+				Placement:   domain.PlacementManaged,
+				Credentials: domain.SecretRef{Name: "widgets-db-app"},
+				AllowedConsumers: []domain.AllowedConsumer{
+					{ServiceAccount: "probe-client"},
+				},
+			},
+		},
+		Externals: []domain.External{backupsExternal()},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	waypointCount := 0
+	for path := range manifests.Files {
+		if filepath.Base(path) == "waypoint.yaml" {
+			waypointCount++
+		}
+	}
+	if waypointCount != 1 {
+		t.Errorf("expected exactly 1 waypoint for the namespace, got %d: %v", waypointCount, sortedKeys(manifests.Files))
+	}
+	if _, ok := manifests.Files["apps/week-one/backups-serviceentry.yaml"]; !ok {
+		t.Error("expected the backup ServiceEntry to be compiled alongside the Neon one")
+	}
+	if _, ok := manifests.Files["apps/week-one/widgets-db-neon-serviceentry.yaml"]; !ok {
+		t.Error("expected the Neon ServiceEntry to be compiled alongside the backup one")
+	}
+}
+
+// TestEmitManagedWithoutAllowedConsumersEmitsNoEgressObjects proves
+// presence is still the only signal (golden rule 50): a managed
+// component that declares no consumers compiles no waypoint, no
+// ServiceEntry, no egress AuthorizationPolicy, and the namespace stays
+// off the ambient dataplane — the correct default-deny state, not a
+// permissive or partial one.
+func TestEmitManagedWithoutAllowedConsumersEmitsNoEgressObjects(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementManaged,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for path := range manifests.Files {
+		base := filepath.Base(path)
+		if base == "waypoint.yaml" || strings.Contains(base, "serviceentry") || strings.Contains(base, "egress-authorizationpolicy") {
+			t.Errorf("emitted %s without any declared consumers", path)
+		}
+	}
+	if bytes.Contains(manifests.Files["apps/week-one/namespace.yaml"], []byte("dataplane-mode")) {
+		t.Error("namespace carries the ambient dataplane label without any egress or mtls guarantee declared")
+	}
+}
+
+// TestEmitNeonEgressUsesProviderDomainPattern proves the honest
+// compile-time limit documented on neonWildcardHost (egress.go): since
+// the Neon endpoint's exact host is runtime-bound (only known after
+// tofu-controller provisions it), the compiled ServiceEntry names the
+// provider's own domain, resolved dynamically per connection — never a
+// fabricated specific host.
+func TestEmitNeonEgressUsesProviderDomainPattern(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	se := string(manifests.Files["apps/week-one/orders-db-neon-serviceentry.yaml"])
+	for _, want := range []string{
+		"'*.neon.tech'",
+		"resolution: DYNAMIC_DNS",
+		"protocol: TLS",
+		`number: 5432`,
+		"istio.io/use-waypoint: waypoint",
+	} {
+		if !strings.Contains(se, want) {
+			t.Errorf("Neon ServiceEntry missing %q:\n%s", want, se)
+		}
+	}
+	authz := string(manifests.Files["apps/week-one/orders-db-neon-egress-authorizationpolicy.yaml"])
+	if !strings.Contains(authz, "cluster.local/ns/week-one/sa/probe-client") {
+		t.Errorf("Neon AuthorizationPolicy does not authorize the declared consumer:\n%s", authz)
+	}
+}
+
+// TestEmitEgressRefusesObjectStoreEndpointWithoutExplicitPort proves
+// egress compilation's own compile-time check (rule 49's "shown able to
+// fail and pass" spirit): a declared external whose endpoint has no
+// explicit port cannot honestly compile a scoped ServiceEntry, so it
+// refuses with a remedy (golden rules 34, 35) rather than guessing a
+// default port, and nothing is written for that call. TestEmitGoldenFiles
+// is this check's "pass" side, exercised against the well-formed
+// examples/week-one/stack.yaml endpoint.
+func TestEmitEgressRefusesObjectStoreEndpointWithoutExplicitPort(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				Guarantees: domain.Guarantees{
+					RPO: &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"},
+				},
+			},
+		},
+		Externals: []domain.External{
+			{
+				Name: "backups",
+				ObjectStore: &domain.ObjectStoreExternal{
+					Endpoint:    "https://minio.d7s-harness.svc",
+					Bucket:      "d7s-backups",
+					Credentials: domain.SecretRef{Name: "backups-credentials"},
+				},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err == nil {
+		t.Fatal("expected an error for an external endpoint with no explicit port, got nil")
+	}
+	if !strings.Contains(err.Error(), "no explicit port") {
+		t.Errorf("error %q does not explain why the endpoint cannot compile", err.Error())
+	}
+	if !strings.Contains(err.Error(), "add a port to the declared endpoint") {
+		t.Errorf("error %q does not carry a remedy (golden rule 35)", err.Error())
+	}
+	if len(manifests.Files) != 0 {
+		t.Errorf("expected no files written on refusal, got %v", sortedKeys(manifests.Files))
 	}
 }
 

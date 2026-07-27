@@ -1,7 +1,6 @@
 package yaml_test
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -128,27 +127,27 @@ func TestLoadManagedPlacementWithoutGuaranteesCompiles(t *testing.T) {
 	}
 }
 
-// TestLoadManagedPlacementWithMTLSAndAllowedConsumersFailsDomainValidation
+// TestLoadManagedPlacementWithMTLSFailsDomainValidationButAllowedConsumersCompiles
 // proves the schema still structurally accepts guarantees.mtls and
 // allowedConsumers alongside placement: managed (golden rule 34's
 // "schema-accepted, refused loudly" shape, not a parse-time rejection),
-// but domain validation refuses both together, aggregated (rule 33).
-func TestLoadManagedPlacementWithMTLSAndAllowedConsumersFailsDomainValidation(t *testing.T) {
+// and that domain validation still refuses guarantees.mtls there — but,
+// since the week-four plan's un-refusal, allowedConsumers alongside it no
+// longer contributes a second error: its own enforcement point is now
+// egress compilation (internal/adapters/flux/egress.go), which does
+// cover managed placement.
+func TestLoadManagedPlacementWithMTLSFailsDomainValidationButAllowedConsumersCompiles(t *testing.T) {
 	doc := strings.Replace(validDoc, "placement: self-hosted", "placement: managed", 1)
 	stack, err := yaml.New().Load([]byte(doc))
 	if err != nil {
 		t.Fatalf("expected the schema to accept placement: managed structurally, got parse error: %v", err)
 	}
 	errs := stack.Validate()
-	if len(errs) != 2 {
-		t.Fatalf("expected exactly 2 aggregated errors (mtls + allowedConsumers), got %v", errs)
+	if len(errs) != 1 {
+		t.Fatalf("expected exactly 1 aggregated error (mtls only — allowedConsumers now compiles on managed placement), got %v", errs)
 	}
-	joined := errors.Join(errs...).Error()
-	if !strings.Contains(joined, "guarantees.mtls + placement: managed refuses to compile") {
+	if !strings.Contains(errs[0].Error(), "guarantees.mtls + placement: managed refuses to compile") {
 		t.Errorf("aggregated errors %v do not include the mtls refusal", errs)
-	}
-	if !strings.Contains(joined, "allowedConsumers + placement: managed refuses to compile") {
-		t.Errorf("aggregated errors %v do not include the allowedConsumers refusal", errs)
 	}
 }
 

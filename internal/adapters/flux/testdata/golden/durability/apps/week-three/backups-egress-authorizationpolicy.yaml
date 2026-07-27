@@ -1,0 +1,18 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: backups-egress
+  namespace: week-three
+  labels:
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: week-three
+spec:
+  targetRefs:
+    - group: networking.istio.io
+      kind: ServiceEntry
+      name: backups
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/week-three/sa/orders-db

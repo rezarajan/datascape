@@ -77,24 +77,21 @@ func TestPostgresValidateMTLSRefusalAggregatesWithOtherErrors(t *testing.T) {
 	}
 }
 
-// TestPostgresValidateAllowedConsumersRefusedOnManagedPlacement mirrors
-// the mtls case for the consumer allow-list: it compiles to a mesh
-// AuthorizationPolicy, which cannot gate a provider-terminated endpoint.
-func TestPostgresValidateAllowedConsumersRefusedOnManagedPlacement(t *testing.T) {
+// TestPostgresValidateAllowedConsumersCompilesOnManagedPlacement proves
+// the un-refusal (week-four plan, slice 2): allowedConsumers +
+// placement: managed no longer refuses at domain validation — its
+// enforcement point is now egress compilation's waypoint-bound
+// ServiceEntry AuthorizationPolicy (internal/adapters/flux/egress.go),
+// which does cover a managed placement, so it needs no guarantees.mtls
+// companion (mtls itself still refuses independently on managed
+// placement — see TestPostgresValidateMTLSRefusedOnManagedPlacement).
+func TestPostgresValidateAllowedConsumersCompilesOnManagedPlacement(t *testing.T) {
 	p := validPostgres()
 	p.Placement = domain.PlacementManaged
 	p.Guarantees.MTLS = nil
 	p.AllowedConsumers = []domain.AllowedConsumer{{ServiceAccount: "probe-client"}}
-	errs := p.Validate()
-	if len(errs) != 1 {
-		t.Fatalf("expected exactly 1 error, got %v", errs)
-	}
-	got := errs[0].Error()
-	if !strings.Contains(got, "allowedConsumers + placement: managed refuses to compile") {
-		t.Errorf("error %q does not name the boundary", got)
-	}
-	if !strings.Contains(got, "placement: self-hosted") || !strings.Contains(got, "remove allowedConsumers") {
-		t.Errorf("error %q does not carry the remedy (golden rule 35)", got)
+	if errs := p.Validate(); len(errs) != 0 {
+		t.Fatalf("expected no errors, got %v", errs)
 	}
 }
 

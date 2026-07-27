@@ -36,9 +36,12 @@ func (p Postgres) ExternalRefs() []string {
 // self-hosted to the Flux/CNPG target, managed to the Flux/tofu-controller
 // target wrapping a Neon provider config. A guarantee whose meaning
 // cannot survive the placement change refuses loudly here rather than
-// silently degrading (golden rules 34, 37, 50) — mesh mTLS and the
-// AuthorizationPolicy allow-list it depends on cannot cover a
-// provider-terminated endpoint outside the mesh.
+// silently degrading (golden rules 34, 37, 50) — mesh mTLS specifically
+// cannot cover a provider-terminated endpoint outside the mesh.
+// allowedConsumers no longer belongs to that list (week-four plan,
+// slice 2): its own enforcement point is now egress compilation's
+// waypoint-bound ServiceEntry authorization, which does cover a managed
+// placement — see the allowedConsumers checks below.
 func (p Postgres) Validate() []error {
 	var errs []error
 
@@ -102,25 +105,22 @@ func (p Postgres) Validate() []error {
 			p.Name))
 	}
 
-	if len(p.AllowedConsumers) > 0 {
-		if p.Placement == PlacementManaged {
-			// allowedConsumers + placement: managed refuses (week-two
-			// plan): the allow-list compiles to a mesh AuthorizationPolicy,
-			// which cannot gate a provider-terminated endpoint outside the
-			// mesh — a schema-accepted field nothing consumes here would
-			// be a defect otherwise (golden rule 34).
-			errs = append(errs, fmt.Errorf(
-				"postgres component %q: allowedConsumers + placement: managed refuses to compile — "+
-					"a consumer allow-list compiles to a mesh AuthorizationPolicy, which cannot gate "+
-					"a provider-terminated endpoint outside the mesh; remove allowedConsumers, or "+
-					"choose placement: self-hosted (enforcement for managed placement arrives with "+
-					"egress compilation, skeleton scope)",
-				p.Name))
-		} else if p.Guarantees.MTLS == nil {
-			errs = append(errs, fmt.Errorf(
-				"postgres component %q: allowedConsumers declared without guarantees.mtls — there is no enforcement point without it; declare guarantees.mtls too",
-				p.Name))
-		}
+	// allowedConsumers + placement: managed now compiles (week-four plan,
+	// slice 2): this refusal used to promise "enforcement arrives with
+	// egress compilation" — it has arrived. A managed component's
+	// declared consumers now gate a waypoint-enforced ServiceEntry
+	// AuthorizationPolicy scoped to the provider's own domain (Neon),
+	// egress compilation's own enforcement point — not mesh mTLS, so it
+	// needs no guarantees.mtls companion (guarantees.mtls + placement:
+	// managed still refuses independently, above: permissioned egress is
+	// not mesh mTLS, and no claim conflates the two). For self-hosted
+	// placement the enforcement point is still the mesh
+	// AuthorizationPolicy that only guarantees.mtls turns on, so that
+	// requirement stands unchanged.
+	if len(p.AllowedConsumers) > 0 && p.Placement == PlacementSelfHosted && p.Guarantees.MTLS == nil {
+		errs = append(errs, fmt.Errorf(
+			"postgres component %q: allowedConsumers declared without guarantees.mtls — there is no enforcement point without it; declare guarantees.mtls too",
+			p.Name))
 	}
 	for i, consumer := range p.AllowedConsumers {
 		if consumer.ServiceAccount == "" {

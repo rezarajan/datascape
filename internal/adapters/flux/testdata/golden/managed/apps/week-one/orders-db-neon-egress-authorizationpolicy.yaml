@@ -1,0 +1,19 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: orders-db-neon-egress
+  namespace: week-one
+  labels:
+    d7s.dev/component: orders-db
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: week-one
+spec:
+  targetRefs:
+    - group: networking.istio.io
+      kind: ServiceEntry
+      name: orders-db-neon
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/week-one/sa/probe-client

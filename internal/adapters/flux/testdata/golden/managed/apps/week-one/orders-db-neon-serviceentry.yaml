@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: orders-db-neon
+  namespace: week-one
+  labels:
+    d7s.dev/component: orders-db
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: week-one
+    istio.io/use-waypoint: waypoint
+spec:
+  hosts:
+    - '*.neon.tech'
+  location: MESH_EXTERNAL
+  ports:
+    - number: 5432
+      name: postgres-tls
+      protocol: TLS
+  resolution: DYNAMIC_DNS
