@@ -36,7 +36,13 @@ export STACK="$MANAGED_STACK"
 export OUT="$MANAGED_OUT"
 export CLUSTER_NAME="$MANAGED_CLUSTER_NAME"
 
-trap 'teardown-managed' EXIT
+# Same serialization + kubeconfig isolation as acceptance.sh — the
+# live-caught concurrent-run collision class (2026-07-27, TASK_PROGRESS).
+acquire_cluster_lock "$CLUSTER_NAME"
+KUBECONFIG="$(mktemp -t d7s-kubeconfig.XXXXXX)"
+export KUBECONFIG
+
+trap 'teardown-managed; rm -f "$KUBECONFIG"' EXIT
 
 compile-managed
 cluster-up
@@ -44,11 +50,18 @@ cluster-up
 # manifests (rbac, deployment) target the flux-system namespace, which
 # only `flux install` creates - found live, 2026-07-26 (repeated
 # "namespaces flux-system not found" errors when the order was
-# reversed). istio-install is deliberately NOT part of this scenario:
-# guarantees.mtls + placement: managed refuses to compile (week-two
-# plan), so a managed-only stack never emits a mesh object for istio to
-# enforce - installing it here would cost time proving nothing.
+# reversed). istio-install (which also installs the Gateway API CRDs)
+# became mandatory here with week-four's egress compiler: a managed
+# stack now emits a waypoint Gateway, exact-host ServiceEntries, and
+# identity-scoped AuthorizationPolicies (THE MESH IS MANDATORY — the
+# week-four plan's verbatim owner directive), so without Istio the
+# delivery refuses at require_gateway_api_prereq (observed as the
+# named refusal in CI runs 30276159658/30297205201; before that guard,
+# the same gap was a silent Kustomization timeout). The pre-week-four
+# comment here claimed the opposite from an assumption that mtls was
+# the only mesh trigger — superseded by the egress compiler.
 flux-install
+istio-install
 tofu-install
 git-source
 deliver-managed

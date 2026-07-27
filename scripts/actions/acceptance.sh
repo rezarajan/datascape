@@ -19,7 +19,16 @@
 # namespace exists and before the Cluster is expected to be healthy.
 require_repo_root
 
-trap 'teardown' EXIT
+# Serialize on the cluster name and pin this run to its own kubeconfig.
+# Both halves close the same live-caught failure class (2026-07-27,
+# TASK_PROGRESS): concurrent same-name runs deleting each other's
+# cluster, and kind's context switching handing a NEIGHBORING cluster's
+# context to this run's kubectl calls mid-step.
+acquire_cluster_lock "$CLUSTER_NAME"
+KUBECONFIG="$(mktemp -t d7s-kubeconfig.XXXXXX)"
+export KUBECONFIG
+
+trap 'teardown; rm -f "$KUBECONFIG"' EXIT
 
 compile-and-verify
 cluster-up

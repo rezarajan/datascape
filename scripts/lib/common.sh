@@ -219,6 +219,26 @@ require_flux_prereq() {
 	fi
 }
 
+# shellcheck disable=SC2329 # shared helper - both acceptance
+# orchestrators call this before their first cluster operation
+acquire_cluster_lock() {
+	# One orchestrator per cluster name at a time. Found live, 2026-07-27
+	# (TASK_PROGRESS): two concurrent acceptance runs shared the same
+	# cluster name, and cluster-up's clean-slate delete destroyed the
+	# first run's cluster mid-flight — a phantom failure that read as a
+	# rollout timeout, not as the collision it was. The lock is held on
+	# fd 9 for the orchestrator's whole lifetime (children inherit it;
+	# flock releases on process exit, so a crashed run never wedges the
+	# next one). Refuse loudly with the remedy (rules 34, 35), same
+	# discipline as every require_*_prereq above.
+	local name="$1"
+	exec 9>"/tmp/d7s-kind-$name.lock"
+	if ! flock -n 9; then
+		echo "refusing to run: another acceptance run holds cluster $name (lock /tmp/d7s-kind-$name.lock) - remedy: wait for that run to finish, or set CLUSTER_NAME/MANAGED_CLUSTER_NAME to a unique value for a parallel cluster" >&2
+		exit 1
+	fi
+}
+
 # shellcheck disable=SC2329 # shared helper - only deliver.sh calls this
 require_istio_prereq() {
 	# guarantees.mtls compiles a PeerAuthentication/AuthorizationPolicy

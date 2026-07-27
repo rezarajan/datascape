@@ -109,6 +109,37 @@ assert_passes "require_gitserver_prereq / present" require_gitserver_prereq
 assert_refuses "require_gateway_api_prereq / absent" require_gateway_api_prereq "nix run .#istio-install"
 assert_passes "require_gateway_api_prereq / present" require_gateway_api_prereq
 
+# acquire_cluster_lock: found live, 2026-07-27 — two concurrent
+# acceptance runs on the same cluster name deleted each other's cluster
+# (cluster-up's clean-slate delete), reading as a phantom rollout
+# timeout. Both directions proven here without any cluster: a free lock
+# acquires; a held lock refuses with the remedy naming the parallel-run
+# escape hatch.
+LOCK_TEST_NAME="prereq-refusal-test-$$"
+if lock_out="$( (acquire_cluster_lock "$LOCK_TEST_NAME" && echo LOCK_OK) 2>&1 )" &&
+	[ "${lock_out#*LOCK_OK}" != "$lock_out" ]; then
+	echo "PASS: acquire_cluster_lock / free (acquires)"
+	pass=$((pass + 1))
+else
+	echo "FAIL: acquire_cluster_lock did not acquire a free lock: $lock_out" >&2
+	fail=$((fail + 1))
+fi
+exec 8>"/tmp/d7s-kind-$LOCK_TEST_NAME.lock"
+flock -n 8
+if lock_out="$( (acquire_cluster_lock "$LOCK_TEST_NAME") 2>&1 )"; then
+	echo "FAIL: acquire_cluster_lock acquired a HELD lock" >&2
+	fail=$((fail + 1))
+elif [ "${lock_out#*"refusing to run"}" = "$lock_out" ] ||
+	[ "${lock_out#*"unique value"}" = "$lock_out" ]; then
+	echo "FAIL: acquire_cluster_lock refusal lacks the named remedy: $lock_out" >&2
+	fail=$((fail + 1))
+else
+	echo "PASS: acquire_cluster_lock / held (refuses, remedy present)"
+	pass=$((pass + 1))
+fi
+exec 8>&-
+rm -f "/tmp/d7s-kind-$LOCK_TEST_NAME.lock"
+
 # poll_n: announces the wait as it starts, not only on timeout (found
 # live: an operator running deliver without git-source watched Flux
 # DNS-fail silently through the whole bounded budget - a bounded wait
