@@ -491,6 +491,29 @@ Upstream research dispatched (support matrix, blessed ambient egress patterns
 for dynamic hosts); design decision round to follow with facts. Self-hosted
 egress proof complete and green.
 
+## DAY CLOSE — 2026-07-27 (session end; next session resumes here)
+
+Week-four state at close: slices 1+2 landed through THREE evidence-driven
+revisions (wildcard → alpha-gated upstream → exact-host pinning; halfway deny →
+REGISTRY_ONLY dead end → COMPILED NetworkPolicy floor, `b3336a9`). Proven live:
+self-hosted egress both probes; managed ceremony end to end (two-phase pin);
+authorization-deny at registered endpoints. NOT yet proven: the NetworkPolicy
+floor itself (landed compiled, never live-run) and its disclosed kube-apiserver
+gap — kind v0.31 enforces NetworkPolicy natively, so **the next CI run on this
+push IS the scheduled experiment**: if CNPG/tf-runner cannot reach the API
+server under the compiled floor, acceptance goes red and that evidence drives
+the next decision (schema knob vs CNI-exemption reliance). UNCOMMITTED in the
+working tree (staged, deliberately held): the harness implementer's slice-3 WIP
+— two-phase ceremony actions, mesh-mandatory managed scenario, both new probe
+legs, and an istio-install REGISTRY_ONLY change that MUST BE REVERTED before
+landing (dead end; see the plan's mechanism correction). Next session's opening
+moves: (1) read CI's verdict on this push; (2) resume the harness implementer's
+held work — revert REGISTRY_ONLY, deliver the compiled floor, prove both deny
+legs live in both scenarios; (3) contract reviews; (4) slice 4 docs
+(QUICKSTART isolation + WALKTHROUGH.md, incl. the ceremony, the istiod-HPA
+note, and CNI prerequisites); (5) week-four exit criteria. Kill review
+2026-08-23; two stacks + three dogfood notes on record.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
