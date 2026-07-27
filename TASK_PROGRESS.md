@@ -559,6 +559,40 @@ the managed scenario now refuses loudly with the CRD remedy instead of timing
 out generically — wiring istio-install into the managed orchestration lands
 with the held WIP.
 
+## Floor experiment ANSWERED; prior inertness claim corrected (2026-07-27)
+
+**Correction to the section above** (append-only; the earlier text stands as
+written): "the compiled floor is INERT on kind" is true only for pods OUTSIDE
+the ambient mesh — the refutation probe ran in a namespace without the ambient
+label. A second, deeper experiment (piecemeal cluster, initdb autopsy, then a
+seven-step mutation matrix with an ambient-captured probe pod) shows the floor
+IS enforced for ambient-captured pods — which is every pod in every
+d7s-compiled namespace carrying a mesh guarantee. Empirical matrix, on demand
+in both directions: all three compiled NetworkPolicies present → ambient pod's
+egress to the apiserver hangs 10s and dies (ztunnel: `io error: deadline has
+elapsed`, the initdb pod's exact signature); policies deleted → 200 in 5ms;
+waypoint, backups ServiceEntry/AuthorizationPolicy, Gateway API CRDs, and
+ambient capture itself each individually exonerated. (Enforcement layer
+observed at the ambient dataplane; exact mechanism attribution — ztunnel vs
+istio-cni redirection interacting with policy — left open, not needed for the
+decision.)
+
+**So the CI/local "Cluster healthy" red IS the scheduled experiment's answer:**
+CNPG's initdb bootstrap (pod-level evidence: exit 1 after five
+`TLS handshake timeout` retries against 10.96.0.1:443) cannot reach the
+apiserver under the compiled floor, because no allow rule can match the
+apiserver's host-network endpoint (node IP:6443 — neither a pod nor a
+namespace any selector reaches). Fail-closed exactly as designed — safe, not
+correct: operator-managed components on k8s placement REQUIRE the control-plane
+edge, the same class as week four's tf-runner finding ("the provisioner edge IS
+declared wiring implied by placement"). Decision round (schema knob vs
+CNI-exemption reliance) put to the owner with these facts — see below. Two
+incidental findings for the record: (1) deleting a still-retrying CNPG initdb
+Job strands the operator in a permanent "Selected PVC is not ready yet" loop —
+never delete the Job mid-backoff (harness/runbook note); (2) istiod logs a
+benign `ServiceEntry week-one/backups was pruned by deduplication` warning —
+red herring, no functional effect.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
