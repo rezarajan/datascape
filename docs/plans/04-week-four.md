@@ -111,6 +111,55 @@ managed component."*
 - The alpha flag path is recorded as evaluated and declined (security posture:
   no best-effort tier); revisit only when upstream graduates the feature.
 
+## Enforcement round — 2026-07-27 (→ Revision 3: default-deny pulled forward)
+
+The ceremony run's negative probe FAILED OPEN: the undeclared identity ran SQL
+against Neon. Mechanism (structural, evidence in the run log and TASK_PROGRESS):
+an identity-scoped ALLOW on a ServiceEntry constrains only traffic routed
+through that object; under "declared endpoints first" all other egress from
+mesh-enrolled workloads passes as unregistered traffic. The halfway posture
+provides no enforceable negative — Amendment 2's compiled default-deny is not
+just contract wording but the enforcement mechanism itself.
+
+**Finding (flagged): this reverses the approval round's deny-breadth answer with
+live evidence — both texts stand.** Owner decision, verbatim: **"Pull
+default-deny forward now (Recommended)"**.
+
+**Revision 3 synthesis:**
+
+- The mesh's outbound policy becomes REGISTRY_ONLY (environment/mesh-install
+  configuration — the mesh install remains an environment prerequisite, so this
+  lands in the istio-install action and its documentation, not compiled output):
+  mesh-enrolled workloads can reach only registered destinations — cluster-local
+  services and the compiled ServiceEntries. Unregistered external egress is
+  denied at the floor; registered endpoints still enforce identity via the
+  compiled authorization.
+- Exemption model (deliberate, enumerated): infra namespaces that are NOT
+  mesh-enrolled (flux-system, the harness's git/minio scaffolding) are untouched
+  by the mesh outbound policy; enrolled namespaces' legitimate egress is exactly
+  cluster-local (registered by nature: kube API, DNS, in-mesh services) plus the
+  compiled ServiceEntries. Surprises surfaced by the harness are findings.
+- The negative probes gain a second leg: an undeclared identity is refused at a
+  REGISTERED endpoint (authorization deny) AND at an UNREGISTERED host (registry
+  deny) — both observed live, both scenarios.
+
+**Mechanism correction (2026-07-27, same owner decision, evidence-driven):** the
+REGISTRY_ONLY mesh-config route is a dead end — maintainer-confirmed
+unimplemented in ambient (istio discussion #53021; live-proven here: full HTTPS
+round trip to an unregistered host with the config verified present), and
+non-enforcing best-effort even in sidecar mode per Istio's own security docs.
+The enforceable floor, per upstream's blessed two-layer pattern, is
+**Kubernetes NetworkPolicy** — which d7s now COMPILES per enrolled stack
+namespace (default-deny egress; allowlist: DNS, istiod control plane,
+same-namespace/cluster-internal, HBONE 15008; the waypoint alone granted open
+egress as the sole gate) — fulfilling Amendment 2's "egress is compiled
+default-deny" more literally than the mesh-config route ever could. Environment
+prerequisite: a NetworkPolicy-enforcing CNI (kind ≥ v0.24 enforces natively —
+the harness's v0.31 needs nothing; generic clusters need Calico/Cilium in
+standard modes, with the known eBPF-mode probe caveats documented). The
+community pattern is treated as unverified until our own probes prove it live
+(rule 58).
+
 ## Explicitly NOT this week (deferred with a home)
 
 Boundary probes beyond egress (import ceremony, v2+); compiled MinIO/object-store
