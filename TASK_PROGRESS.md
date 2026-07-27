@@ -462,6 +462,20 @@ dispatched in parallel: mesh-mandatory scenarios, positive probes through the
 mesh, negative undeclared-workload egress probes both scenarios, the SNI
 empirical answer. Both full live runs required before its commit.
 
+## Live-caught composition bug at the trust boundary (2026-07-26/27)
+
+Slice 3's managed run: the compiled egress enforcement BLOCKED d7s's own
+provisioner — tf-runner's `terraform plan` EOF'd calling console.neon.tech:443,
+which matches the *.neon.tech ServiceEntry but is allowed to no identity and no
+port besides consumers:5432. Week-one's rule-42 composition class recurring at
+the boundary, caught by the deny-by-default posture exactly as designed. Fix
+authorized within plan slice 1 (the provisioner edge IS declared wiring implied
+by placement: managed): emit the control-plane edge — 443 scoped to the
+d7s-compiled tf-runner ServiceAccount only; consumers keep 5432 only. Emitter
+fix in flight; slice 3 re-runs managed live after. Self-hosted half already
+green: backup through the waypoint, undeclared identity refused with
+diagnostics.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
