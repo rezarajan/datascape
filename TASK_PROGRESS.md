@@ -593,6 +593,57 @@ never delete the Job mid-backoff (harness/runbook note); (2) istiod logs a
 benign `ServiceEntry week-one/backups was pruned by deduplication` warning —
 red herring, no functional effect.
 
+## Floor composed with declared wiring; acceptance GREEN end to end (2026-07-27)
+
+Owner directive mid-session, verbatim: *"I will be clear - absolutely no agents
+should run code in parallel. Only the main agent is responsible to all tasks."*
+All work below executed directly in the main session. (The directive followed
+repeated subagent stalls AND a live collision: concurrent sessions run
+same-named `d7s-acceptance` kind clusters, and cluster-up deletes any
+pre-existing one — a phantom-failure source. Harness finding, unfixed:
+the cluster name needs per-run uniqueness or a lock.)
+
+Two further floor-composition defects found and fixed after Revision 4's edge
+landed (`38e6194`), each root-caused live before its fix:
+
+1. **`049f6b6` — the declared-wiring edge.** With the Cluster healthy, the
+   durability leg failed: barman-cloud-wal-archive exit 4. The instance pod
+   resolves the external's endpoint itself via kube-dns and dials the
+   ClusterIP directly — a path no floor rule covered, so default-deny ate the
+   DECLARED data path (Amendment 2 violated by omission). The floor now
+   compiles one policy per (component, wired external) pair from the same
+   backupEgressTargets derivation the mesh layer uses: cluster-local endpoints
+   pin namespace+port; off-cluster hosts carry the disclosed port-only limit.
+2. **`94982e3` — the cluster-local mesh-gate carve-out.** The declared-wiring
+   edge alone did not cure it: the connection then reached the mesh layer and
+   died mid-protocol (ztunnel: bytes_recv=0 at exactly 10s, waypoint silent).
+   Mechanism, proven live: istiod PRUNES a ServiceEntry whose host duplicates
+   a real in-cluster Service ("pruned by deduplication" — observed earlier and
+   wrongly dismissed as benign), so the waypoint never gets the route, while
+   ztunnel still redirects the SE's VIP into that waypoint: a black hole.
+   Dropping the SE's use-waypoint label live → WAL files archived within
+   seconds and the wedged Backup completed. Cluster-local external endpoints
+   (the owner-approved dev/prod-parity simulation pattern) now compile NO
+   ServiceEntry/AuthorizationPolicy and count toward no waypoint — emitting
+   them would be an inert-then-harmful safety object (rule 37; the platformctl
+   death class). Their compiled containment is the declared-wiring floor edge;
+   genuinely external hosts keep the full mesh-identity gate. Week-one and
+   durability golden sets lose 4 objects each accordingly.
+
+**Verified by running (rule 58):** fast tier + 11/11 conformance green at
+`94982e3`; full acceptance sequence green END TO END on a fresh kind cluster —
+delivery under the enforced floor, Cluster healthy, mTLS positive probe,
+off-mesh plaintext REFUSED, CONDITIONAL durability label, and the CNPG Backup
+reaching phase `completed` (the leg red since the floor landed). Environmental
+caveat, disclosed: the host shared bandwidth with an unrelated kind cluster all
+session (repeated cold-pull timeouts at changing steps — minio, gitserver,
+source-controller), so the green run pre-warmed the node's images via crictl
+before the documented piecemeal sequence; CI's fresh-runner run on this push is
+the uncontended orchestrator proof. Also hit: `kind load docker-image` is
+broken against this docker/containerd combination in both kind v0.31/v0.32
+(containerd config v4 / digest-import errors) — crictl pull inside the node is
+the working warm-up path.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
