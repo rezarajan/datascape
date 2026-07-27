@@ -514,6 +514,51 @@ legs live in both scenarios; (3) contract reviews; (4) slice 4 docs
 note, and CNI prerequisites); (5) week-four exit criteria. Kill review
 2026-08-23; two stacks + three dogfood notes on record.
 
+## CI verdict read; gateway-crd root cause fixed; floor premise REFUTED (2026-07-27)
+
+Steward session from a stale checkout: local main had diverged (80 behind, one
+ahead — the steward-skill commit, whose message violated the commit gate). Owner
+directive: origin/main authoritative, keep only the skill. Resynced; skill landed
+reworded as `b9ae13d`; upstream tracking fixed (was pointing at the old kickoff
+branch); pushed.
+
+**CI's verdict on the day-close push (runs 30254082510, 30270332686 — both red,
+identically): NOT the scheduled experiment's answer.** Root cause, proven live
+both directions on a throwaway kind cluster: week four's egress compiler emits a
+waypoint `Gateway` into every mesh-joined app namespace, but nothing installs
+the Kubernetes Gateway API CRDs — kind doesn't ship them and `istioctl install`
+doesn't either — so the week-one Kustomization's apply fails ("no matches for
+kind Gateway") and never reaches Ready. The slice-3 live proofs passed only
+because the debug cluster had the CRDs from earlier debugging — dogfood-note-3's
+environment-drift class, one layer down. Fix slice (owner-approved via question
+round, implementer-executed): `563afc4` vendors the standard-channel CRDs at
+v1.5.1 (matching istioctl 1.30.3), installs them in istio-install before
+istioctl, adds `require_gateway_api_prereq` fail-closed guards to both deliver
+actions with the rule-39 conformance case (11/11); `0e69c5b` makes `poll_n`
+dump bounded cluster-side state on timeout — two CI reds needed out-of-band
+diagnosis because timeouts were silent. Contract review: clean. Full live
+acceptance re-run: both Kustomizations Ready (original blocker gone); timed out
+at the NEXT gate, Cluster healthy, with the cold 219MB postgres pull eating
+2m03s of the wait on home bandwidth — CI's network will differ; CI is the
+arbiter on this push.
+
+**The day-close premise "kind v0.31 enforces NetworkPolicy natively" is FALSE —
+refuted by direct probe** (steward-run, throwaway cluster): with the full
+compiled floor applied to a scratch namespace, egress to example.com AND to the
+apiserver both returned 200; plain `kind create cluster` runs kindnetd with no
+policy enforcement. Consequences: (a) the compiled floor is INERT on kind — a
+green kind acceptance claims nothing about the deny floor, and the floor is
+proven live nowhere; (b) the schema-knob vs CNI-exemption decision has no
+evidence either way yet and needs an enforcement vehicle first (kind + Calico/
+Cilium, kube-network-policies, or the team's real cluster) — decision round
+pending with these facts; (c) held slice-3 negative egress probe legs that rely
+on the floor (off-mesh undeclared workload) cannot pass on stock kind;
+mesh-layer probes (ztunnel/waypoint) are unaffected. Related finding, named not
+fixed (slice-3 surface): `acceptance-managed.sh` never runs istio-install, so
+the managed scenario now refuses loudly with the CRD remedy instead of timing
+out generically — wiring istio-install into the managed orchestration lands
+with the held WIP.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
@@ -525,5 +570,12 @@ note, and CNI prerequisites); (5) week-four exit criteria. Kill review
   flagged and resolved in the plan, not silently. Teardown: harness ephemeral,
   dogfood persists. Dogfood note 2 comes from a separate real request. Build starts
   at slice 1 (now a feasibility spike: tofu-controller health + local-Neon path).
-- **Push main**: 12+ local commits unpushed; first real run of the flake-wired CI
-  acceptance job waits on it.
+- **Push main**: RESOLVED 2026-07-27 — pushed (that run was red; root cause the
+  gateway-crd gap above, fixed and re-pushed same day).
+- **Held slice-3 WIP** (other working copy): rebase on `563afc4`+`0e69c5b`
+  before landing — istio-install changed (CRD install added; REGISTRY_ONLY
+  revert still owed) and the floor-refutation above re-scopes the negative
+  egress probe legs.
+- **Floor-enforcement vehicle**: decision round pending (see 2026-07-27 section)
+  before the schema-knob vs CNI-exemption question can be answered with
+  evidence.
