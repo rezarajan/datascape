@@ -207,6 +207,28 @@ require_istio_prereq() {
 	fi
 }
 
+# shellcheck disable=SC2329 # shared helper - deliver.sh and
+# deliver-managed.sh both call this
+require_gateway_api_prereq() {
+	# week-four's egress compiler emits a waypoint Gateway
+	# (gateway.networking.k8s.io/v1) into every mesh-joined app namespace
+	# (internal/adapters/flux/flux.go) - without the Gateway API CRDs
+	# installed, that apply fails outright ("no matches for kind Gateway
+	# in version gateway.networking.k8s.io/v1"), the app Kustomization
+	# never reaches Ready, and deliver's poll below just times out after
+	# its full bounded budget with no clearer symptom (confirmed live on
+	# a throwaway kind cluster, both directions: CI runs
+	# 30254082510/30270332686). istio-install installs these CRDs
+	# (vendored, scripts/vendor/gateway-api) alongside Istio itself, but
+	# a piecemeal path that skips it hits the identical trap
+	# require_istio_prereq guards against above. Fail closed with the
+	# remedy instead (rules 34, 35), same reasoning.
+	if ! kubectl get crd gateways.gateway.networking.k8s.io >/dev/null 2>&1; then
+		echo "refusing to deliver: the Gateway API CRDs are not installed (CRD gateways.gateway.networking.k8s.io not found) - compiled waypoints have nothing to apply against - remedy: run 'nix run .#istio-install' first; the 'nix run .#acceptance' orchestrator does this for you" >&2
+		exit 1
+	fi
+}
+
 # shellcheck disable=SC2329 # shared helper - only deliver.sh calls this
 require_minio_prereq() {
 	# The declared external's backing store must exist before deliver's

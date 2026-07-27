@@ -14,8 +14,17 @@
 # register_git_source's whole bounded poll budget instead of naming the
 # missing prerequisite. Fail closed with the remedy instead, before ever
 # registering the GitRepository.
+#
+# require_gateway_api_prereq: the managed stack's declared
+# allowedConsumers compiles a waypoint Gateway exactly like the
+# self-hosted stack's egress guarantees do (internal/adapters/flux/
+# flux.go) - the Flux Kustomization applied below fails the identical
+# way without the Gateway API CRDs installed (confirmed live, CI runs
+# 30254082510/30270332686), so this scenario needs the same guard
+# deliver.sh has, before ever applying that Kustomization.
 require_repo_root
 require_gitserver_prereq
+require_gateway_api_prereq
 
 log "flux: git push  # register the git source, named/namespaced for the emitter's sourceRef"
 register_git_source

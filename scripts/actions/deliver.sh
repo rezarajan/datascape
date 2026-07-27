@@ -28,17 +28,20 @@
 # environment prerequisite this script itself depends on before doing
 # anything - Flux (its first kubectl apply targets flux-system), Istio
 # (guarantees.mtls has nothing to enforce against without it - otherwise
-# only surfaces later as a generic poll timeout), MinIO (the durability
-# guarantee's declared external, dogfood note 3's own failure), and the
-# in-cluster git source register_git_source is about to register a
-# GitRepository against (found live, one step over: without it the
-# GitRepository just DNS-fails silently through register_git_source's
-# whole bounded poll budget) - so a cold operator gets a named
-# prerequisite and its remedy, never a raw API error or a wait that
-# reads as a hang.
+# only surfaces later as a generic poll timeout), the Gateway API CRDs
+# (compiled waypoints have nothing to apply against without them -
+# confirmed live, CI runs 30254082510/30270332686 - same failure class,
+# one layer under Istio itself), MinIO (the durability guarantee's
+# declared external, dogfood note 3's own failure), and the in-cluster
+# git source register_git_source is about to register a GitRepository
+# against (found live, one step over: without it the GitRepository just
+# DNS-fails silently through register_git_source's whole bounded poll
+# budget) - so a cold operator gets a named prerequisite and its remedy,
+# never a raw API error or a wait that reads as a hang.
 require_repo_root
 require_flux_prereq
 require_istio_prereq
+require_gateway_api_prereq
 require_minio_prereq
 require_gitserver_prereq
 

@@ -106,6 +106,9 @@ assert_passes "require_minio_prereq / present" require_minio_prereq
 assert_refuses "require_gitserver_prereq / absent" require_gitserver_prereq "nix run .#git-source"
 assert_passes "require_gitserver_prereq / present" require_gitserver_prereq
 
+assert_refuses "require_gateway_api_prereq / absent" require_gateway_api_prereq "nix run .#istio-install"
+assert_passes "require_gateway_api_prereq / present" require_gateway_api_prereq
+
 # poll_n: announces the wait as it starts, not only on timeout (found
 # live: an operator running deliver without git-source watched Flux
 # DNS-fail silently through the whole bounded budget - a bounded wait

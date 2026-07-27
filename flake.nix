@@ -91,7 +91,7 @@
 
           flux-install = action "flux-install" [ pkgs.fluxcd ] ./scripts/actions/flux-install.sh;
 
-          istio-install = action "istio-install" [ pkgs.istioctl ] ./scripts/actions/istio-install.sh;
+          istio-install = action "istio-install" (with pkgs; [ istioctl kubectl ]) ./scripts/actions/istio-install.sh;
 
           # minio-install/minio-secret — the acceptance stack's declared
           # `external` object store (week-three plan, slice 3): harness
