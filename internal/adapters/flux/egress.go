@@ -1,6 +1,7 @@
 package flux
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -190,9 +191,17 @@ type backupEgressTarget struct {
 // Built by walking selfHosted in its own (deterministic, declaration-
 // order) sequence — no map iteration ever decides output order, so
 // output stays byte-identical across compiles (golden rules 22, 45).
+//
+// Every problem found across the whole loop is collected and joined
+// (golden rule 33: validate-time completeness) rather than returned on
+// the first one — mirrors Emit's own first loop over stack.Components,
+// which does the same (var errs []error, append, continue, then
+// errors.Join once at the end) rather than stopping at the first bad
+// component.
 func backupEgressTargets(selfHosted []domain.Postgres, externals map[string]domain.External) ([]backupEgressTarget, error) {
 	byName := make(map[string]*backupEgressTarget)
 	var order []string
+	var errs []error
 	for _, pg := range selfHosted {
 		if pg.Guarantees.RPO == nil {
 			continue
@@ -202,19 +211,24 @@ func backupEgressTargets(selfHosted []domain.Postgres, externals map[string]doma
 		if !seen {
 			ext, ok := externals[name]
 			if !ok {
-				return nil, fmt.Errorf(
+				errs = append(errs, fmt.Errorf(
 					"flux emitter: postgres component %q: guarantees.rpo.backupTo %q does not resolve to a declared external — this is a defect (domain validation should have caught it)",
-					pg.Name, name)
+					pg.Name, name))
+				continue
 			}
 			host, port, err := objectStoreHostPort(ext)
 			if err != nil {
-				return nil, err
+				errs = append(errs, err)
+				continue
 			}
 			t = &backupEgressTarget{ExternalName: name, Host: host, Port: port}
 			byName[name] = t
 			order = append(order, name)
 		}
 		t.Consumers = append(t.Consumers, pg.Name)
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 	targets := make([]backupEgressTarget, 0, len(order))
 	for _, name := range order {

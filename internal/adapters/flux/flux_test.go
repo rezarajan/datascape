@@ -1061,6 +1061,67 @@ func TestEmitEgressRefusesObjectStoreEndpointWithoutExplicitPort(t *testing.T) {
 	}
 }
 
+// TestEmitEgressAggregatesMalformedExternalErrors proves
+// backupEgressTargets collects every malformed external across the whole
+// stack rather than stopping at the first (golden rule 33: validate-time
+// completeness) — a contract-review finding: two components each backing
+// up to their own malformed external must report BOTH problems in one
+// call, not just the first one encountered.
+func TestEmitEgressAggregatesMalformedExternalErrors(t *testing.T) {
+	stack := domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "orders-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "orders-db-app"},
+				Guarantees: domain.Guarantees{
+					RPO: &domain.RPOGuarantee{Target: time.Hour, BackupTo: "backups"},
+				},
+			},
+			domain.Postgres{
+				Name:        "widgets-db",
+				Placement:   domain.PlacementSelfHosted,
+				Credentials: domain.SecretRef{Name: "widgets-db-app"},
+				Guarantees: domain.Guarantees{
+					RPO: &domain.RPOGuarantee{Target: time.Hour, BackupTo: "widgets-backups"},
+				},
+			},
+		},
+		Externals: []domain.External{
+			{
+				Name: "backups",
+				ObjectStore: &domain.ObjectStoreExternal{
+					// No explicit port.
+					Endpoint:    "https://minio.d7s-harness.svc",
+					Bucket:      "d7s-backups",
+					Credentials: domain.SecretRef{Name: "backups-credentials"},
+				},
+			},
+			{
+				Name: "widgets-backups",
+				ObjectStore: &domain.ObjectStoreExternal{
+					// Not a parseable URL at all.
+					Endpoint:    "://not-a-url",
+					Bucket:      "widgets-backups",
+					Credentials: domain.SecretRef{Name: "widgets-backups-credentials"},
+				},
+			},
+		},
+	}
+	_, err := flux.New().Emit(stack)
+	if err == nil {
+		t.Fatal("expected an error for two malformed externals, got nil")
+	}
+	joined := err.Error()
+	if !strings.Contains(joined, `external "backups"`) || !strings.Contains(joined, "no explicit port") {
+		t.Errorf("aggregated error %q does not include the \"backups\" refusal", joined)
+	}
+	if !strings.Contains(joined, `external "widgets-backups"`) {
+		t.Errorf("aggregated error %q does not include the \"widgets-backups\" refusal — only the first malformed external was reported", joined)
+	}
+}
+
 // unknownComponent is a domain.Component of a kind the flux emitter does
 // not implement, used to prove the unimplemented-kind path refuses
 // loudly (golden rule 34) instead of silently skipping it.
