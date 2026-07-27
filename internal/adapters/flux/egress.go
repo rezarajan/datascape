@@ -107,6 +107,41 @@ const (
 	// does not verify — flagged here rather than assumed.
 	neonWildcardHost = "*.neon.tech"
 	neonPostgresPort = 5432
+
+	// neonControlPlaneName, neonControlPlaneHost, and
+	// neonControlPlanePort compile the provisioner's own edge — a live
+	// composition bug this egress enforcement caught (2026-07-26): the
+	// managed scenario's tf-runner pod, now correctly mesh-captured once
+	// any managed component makes the stack namespace ambient, failed
+	// `terraform plan` with `Get "https://console.neon.tech/api/v2/...":
+	// EOF` — console.neon.tech matches the *.neon.tech ServiceEntry's
+	// HOST wildcard, but that ServiceEntry only lists port 5432, so the
+	// tf-runner's HTTPS/443 control-plane call to Neon's API had no
+	// matching port and was denied. The zero-trust posture was doing its
+	// job; the declared wiring graph was incomplete — placement: managed
+	// itself implies this edge (every managed component's Terraform CR
+	// calls Neon's API to provision it, unconditionally, regardless of
+	// whether that component also declares allowedConsumers), so it is
+	// declared wiring, not a new declaration the schema needs.
+	//
+	// Unlike neonWildcardHost (genuinely runtime-bound — the per-branch
+	// data endpoint isn't known until after provisioning), the
+	// control-plane host is NOT runtime-bound: it is the kislerdm/neon
+	// provider's fixed API base URL, https://console.neon.tech/api/v2
+	// (verified against the provider's own docs and Neon's Terraform
+	// guide, 2026-07-26 — "cf. the SDK's baseURL"). A dedicated,
+	// EXACT-host ServiceEntry is therefore both simpler and more honest
+	// than reusing the wildcard: it never needs DYNAMIC_DNS, and it
+	// never widens what the wildcard SE's own per-component consumers
+	// are allowed to reach. Compiled once per stack (like emitWaypoint
+	// and emitManagedRunnerRBAC) rather than once per managed
+	// component: the tf-runner ServiceAccount is itself shared across
+	// every managed component in a stack (emitManagedRunnerRBAC), so a
+	// second identical ServiceEntry/AuthorizationPolicy pair per
+	// component would be redundant, not more precise.
+	neonControlPlaneName = "neon-control-plane"
+	neonControlPlaneHost = "console.neon.tech"
+	neonControlPlanePort = 443
 )
 
 // Gateway is the subset of a Kubernetes Gateway API
@@ -277,12 +312,16 @@ func objectStoreHostPort(ext domain.External) (host string, port int, err error)
 }
 
 // neonEgressTargets returns every managed Postgres component that
-// declares allowedConsumers — the ones egress compilation now covers
-// (week-four plan, slice 2's un-refusal). A managed component with no
-// declared consumers stays reachable by nothing (the correct
-// default-deny state, mirroring AllowedConsumer's own doc comment) and
-// compiles no egress objects at all — presence is still the only signal
-// (golden rule 50).
+// declares allowedConsumers — the ones whose DATA-PLANE branch endpoint
+// egress compilation covers (week-four plan, slice 2's un-refusal). A
+// managed component with no declared consumers stays reachable by
+// nothing on its data plane (the correct default-deny state, mirroring
+// AllowedConsumer's own doc comment) and compiles no per-component
+// ServiceEntry/AuthorizationPolicy — presence is still the only signal
+// (golden rule 50). This is independent of the CONTROL-PLANE edge
+// (emitNeonControlPlaneEgress), which every managed component needs
+// regardless of declared consumers — see neonControlPlaneHost's doc
+// comment for the live-caught bug this distinction closes.
 func neonEgressTargets(managed []domain.Postgres) []domain.Postgres {
 	var out []domain.Postgres
 	for _, pg := range managed {
@@ -295,17 +334,23 @@ func neonEgressTargets(managed []domain.Postgres) []domain.Postgres {
 
 // emitEgress compiles the egress guarantee family for stack (week-four
 // plan, slice 1+2): nothing at all when no component declares wiring
-// that crosses the mesh boundary; otherwise exactly one shared waypoint
-// plus one ServiceEntry/AuthorizationPolicy pair per declared external
-// and per managed component with declared consumers.
+// that crosses the mesh boundary; otherwise exactly one shared waypoint,
+// one ServiceEntry/AuthorizationPolicy pair per declared external and per
+// managed component with declared consumers, and — unconditionally for
+// every managed component, declared consumers or not — the provisioner's
+// own control-plane edge (neonControlPlaneHost's doc comment: a managed
+// component's Terraform CR always calls Neon's API to provision it, so
+// that edge is implied by placement: managed itself, not by
+// allowedConsumers).
 func emitEgress(files map[string][]byte, stackName string, selfHosted, managed []domain.Postgres, externalsByName map[string]domain.External) error {
 	backupTargets, err := backupEgressTargets(selfHosted, externalsByName)
 	if err != nil {
 		return err
 	}
 	neonTargets := neonEgressTargets(managed)
+	needsControlPlane := len(managed) > 0
 
-	if len(backupTargets) == 0 && len(neonTargets) == 0 {
+	if len(backupTargets) == 0 && len(neonTargets) == 0 && !needsControlPlane {
 		return nil
 	}
 
@@ -319,6 +364,11 @@ func emitEgress(files map[string][]byte, stackName string, selfHosted, managed [
 	}
 	for _, pg := range neonTargets {
 		if err := emitNeonEgress(files, stackName, pg); err != nil {
+			return err
+		}
+	}
+	if needsControlPlane {
+		if err := emitNeonControlPlaneEgress(files, stackName); err != nil {
 			return err
 		}
 	}
@@ -465,4 +515,69 @@ func emitNeonEgress(files map[string][]byte, stackName string, pg domain.Postgre
 		},
 	}
 	return set(files, fmt.Sprintf("apps/%s/%s-egress-authorizationpolicy.yaml", stackName, seName), authz)
+}
+
+// emitNeonControlPlaneEgress compiles the provisioner's own edge: the
+// tf-runner ServiceAccount (emitManagedRunnerRBAC, terraform.go) reaching
+// Neon's fixed API host on port 443 — the live-caught bug documented at
+// neonControlPlaneHost's doc comment. Scoped to EXACTLY the tf-runner
+// identity: a declared consumer (emitNeonEgress's allow-list) has no
+// business calling Neon's provisioning API, and tf-runner has no business
+// on the data-plane port — the two AuthorizationPolicies never share a
+// principal or a port, each own ServiceEntry/policy pair enforcing only
+// its own edge (golden rule 53). Called once per stack whenever any
+// managed component exists (regardless of declared consumers), the same
+// "one shared object, not one per component" discipline emitWaypoint and
+// emitManagedRunnerRBAC already follow, since the identity it authorizes
+// (tf-runner) is itself shared across every managed component in the
+// stack.
+func emitNeonControlPlaneEgress(files map[string][]byte, stackName string) error {
+	seLabels := ownershipLabels(stackName, "")
+	seLabels[useWaypointLabel] = waypointName
+	se := ServiceEntry{
+		APIVersion: "networking.istio.io/v1",
+		Kind:       "ServiceEntry",
+		Metadata: ObjectMeta{
+			Name:      neonControlPlaneName,
+			Namespace: stackName,
+			Labels:    seLabels,
+		},
+		Spec: ServiceEntrySpec{
+			Hosts:    []string{neonControlPlaneHost},
+			Location: "MESH_EXTERNAL",
+			Ports: []ServiceEntryPort{
+				{Number: neonControlPlanePort, Name: "https", Protocol: "TLS"},
+			},
+			// The control-plane host is a fixed, known constant (not a
+			// wildcard like neonWildcardHost), so plain per-lookup DNS
+			// resolution is the honest, simplest choice — DYNAMIC_DNS
+			// exists specifically for wildcard hosts this SE does not
+			// declare.
+			Resolution: "DNS",
+		},
+	}
+	if err := set(files, fmt.Sprintf("apps/%s/%s-serviceentry.yaml", stackName, neonControlPlaneName), se); err != nil {
+		return err
+	}
+
+	authz := AuthorizationPolicy{
+		APIVersion: "security.istio.io/v1",
+		Kind:       "AuthorizationPolicy",
+		Metadata: ObjectMeta{
+			Name:      neonControlPlaneName + "-egress",
+			Namespace: stackName,
+			Labels:    ownershipLabels(stackName, ""),
+		},
+		Spec: AuthorizationPolicySpec{
+			TargetRefs: []AuthorizationPolicyTargetRef{
+				{Group: serviceEntryTargetRefGroup, Kind: serviceEntryTargetRefKind, Name: neonControlPlaneName},
+			},
+			Rules: []AuthorizationPolicyRule{
+				{From: []AuthorizationPolicyFrom{{Source: AuthorizationPolicySource{
+					Principals: []string{principal(stackName, domain.AllowedConsumer{ServiceAccount: tfRunnerServiceAccountName})},
+				}}}},
+			},
+		},
+	}
+	return set(files, fmt.Sprintf("apps/%s/%s-egress-authorizationpolicy.yaml", stackName, neonControlPlaneName), authz)
 }

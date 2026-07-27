@@ -129,22 +129,22 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 	// Finding names: "the self-hosted scenario's unmediated backup egress
 	// to MinIO" and "the managed scenario ... probe dialing Neon
 	// directly" — both previously ran with no mesh in the path, the
-	// contract gap this plan closes). The app namespace's own ambient
-	// label is therefore driven by EITHER condition; the CNPG operator's
-	// is driven only by mtlsEnabled, since egress traffic never touches
-	// the operator's own control-plane connection.
+	// contract gap this plan closes). ANY managed component also sets
+	// this, regardless of declared consumers (live-caught bug,
+	// 2026-07-26, documented in egress.go's neonControlPlaneHost doc
+	// comment): its Terraform CR's tf-runner pod always calls Neon's
+	// provisioning API, an edge placement: managed itself implies, not
+	// one gated by allowedConsumers. The app namespace's own ambient
+	// label is therefore driven by any of these; the CNPG operator's is
+	// driven only by mtlsEnabled, since egress traffic never touches the
+	// operator's own control-plane connection.
 	mtlsEnabled := false
-	egressNeeded := false
+	egressNeeded := len(managed) > 0
 	for _, pg := range selfHosted {
 		if pg.Guarantees.MTLS != nil {
 			mtlsEnabled = true
 		}
 		if pg.Guarantees.RPO != nil {
-			egressNeeded = true
-		}
-	}
-	for _, pg := range managed {
-		if len(pg.AllowedConsumers) > 0 {
 			egressNeeded = true
 		}
 	}

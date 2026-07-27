@@ -953,13 +953,18 @@ func TestEmitWaypointSharedAcrossBackupAndNeonEgress(t *testing.T) {
 	}
 }
 
-// TestEmitManagedWithoutAllowedConsumersEmitsNoEgressObjects proves
-// presence is still the only signal (golden rule 50): a managed
-// component that declares no consumers compiles no waypoint, no
-// ServiceEntry, no egress AuthorizationPolicy, and the namespace stays
-// off the ambient dataplane — the correct default-deny state, not a
-// permissive or partial one.
-func TestEmitManagedWithoutAllowedConsumersEmitsNoEgressObjects(t *testing.T) {
+// TestEmitManagedWithoutAllowedConsumersEmitsControlPlaneEgressOnlyNoDataPlane
+// proves presence is still the only signal for the DATA-PLANE edge
+// specifically (golden rule 50): a managed component that declares no
+// consumers compiles no per-component Neon ServiceEntry/
+// AuthorizationPolicy (its branch endpoint stays reachable by nothing).
+// It DOES still compile the shared waypoint and the control-plane
+// ServiceEntry/AuthorizationPolicy scoped to tf-runner (egress.go's
+// neonControlPlaneHost doc comment: a live-caught bug, 2026-07-26 —
+// placement: managed always needs its own Terraform CR to reach Neon's
+// API, regardless of declared consumers), so the namespace does join the
+// ambient dataplane even here.
+func TestEmitManagedWithoutAllowedConsumersEmitsControlPlaneEgressOnlyNoDataPlane(t *testing.T) {
 	stack := domain.Stack{
 		Name: "week-one",
 		Components: []domain.Component{
@@ -976,12 +981,21 @@ func TestEmitManagedWithoutAllowedConsumersEmitsNoEgressObjects(t *testing.T) {
 	}
 	for path := range manifests.Files {
 		base := filepath.Base(path)
-		if base == "waypoint.yaml" || strings.Contains(base, "serviceentry") || strings.Contains(base, "egress-authorizationpolicy") {
-			t.Errorf("emitted %s without any declared consumers", path)
+		if strings.HasPrefix(base, "orders-db-neon-") {
+			t.Errorf("emitted the data-plane object %s without any declared consumers", path)
 		}
 	}
-	if bytes.Contains(manifests.Files["apps/week-one/namespace.yaml"], []byte("dataplane-mode")) {
-		t.Error("namespace carries the ambient dataplane label without any egress or mtls guarantee declared")
+	if _, ok := manifests.Files["apps/week-one/waypoint.yaml"]; !ok {
+		t.Error("expected the shared waypoint to be compiled for the provisioner's control-plane edge even with no declared consumers")
+	}
+	if _, ok := manifests.Files["apps/week-one/neon-control-plane-serviceentry.yaml"]; !ok {
+		t.Error("expected the control-plane ServiceEntry to be compiled even with no declared consumers")
+	}
+	if _, ok := manifests.Files["apps/week-one/neon-control-plane-egress-authorizationpolicy.yaml"]; !ok {
+		t.Error("expected the control-plane AuthorizationPolicy to be compiled even with no declared consumers")
+	}
+	if !bytes.Contains(manifests.Files["apps/week-one/namespace.yaml"], []byte("dataplane-mode")) {
+		t.Error("namespace does not carry the ambient dataplane label despite the provisioner's own control-plane edge needing it")
 	}
 }
 
@@ -1011,6 +1025,94 @@ func TestEmitNeonEgressUsesProviderDomainPattern(t *testing.T) {
 	authz := string(manifests.Files["apps/week-one/orders-db-neon-egress-authorizationpolicy.yaml"])
 	if !strings.Contains(authz, "cluster.local/ns/week-one/sa/probe-client") {
 		t.Errorf("Neon AuthorizationPolicy does not authorize the declared consumer:\n%s", authz)
+	}
+}
+
+// TestEmitNeonControlPlaneEgressGrantsOnlyTfRunnerOn443 is the
+// composition-class test for the live-caught bug documented at
+// egress.go's neonControlPlaneHost doc comment (2026-07-26): tf-runner
+// (the Terraform CR's own runner pod, emitManagedRunnerRBAC) must be
+// allowed the provisioner's control-plane edge (console.neon.tech:443)
+// and NOT the data-plane port (5432); a declared consumer
+// (probe-client) must be allowed the data-plane port (5432) and NOT the
+// control-plane one (443) — the two edges never share a principal or a
+// port, each enforced by its own ServiceEntry/AuthorizationPolicy pair
+// rather than one shared, wider policy (golden rule 53). Uses
+// managedExampleStack(), which declares both allowedConsumers and (via
+// placement: managed) the always-present provisioner edge, so both
+// pairs compile in the same call.
+func TestEmitNeonControlPlaneEgressGrantsOnlyTfRunnerOn443(t *testing.T) {
+	manifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+
+	controlPlaneSE := string(manifests.Files["apps/week-one/neon-control-plane-serviceentry.yaml"])
+	if !strings.Contains(controlPlaneSE, "console.neon.tech") {
+		t.Errorf("control-plane ServiceEntry does not name console.neon.tech:\n%s", controlPlaneSE)
+	}
+	if !strings.Contains(controlPlaneSE, "number: 443") {
+		t.Errorf("control-plane ServiceEntry does not carry port 443:\n%s", controlPlaneSE)
+	}
+	if strings.Contains(controlPlaneSE, "5432") {
+		t.Errorf("control-plane ServiceEntry must not carry the data-plane port 5432:\n%s", controlPlaneSE)
+	}
+
+	controlPlaneAuthz := string(manifests.Files["apps/week-one/neon-control-plane-egress-authorizationpolicy.yaml"])
+	if !strings.Contains(controlPlaneAuthz, "cluster.local/ns/week-one/sa/tf-runner") {
+		t.Errorf("control-plane AuthorizationPolicy does not authorize tf-runner:\n%s", controlPlaneAuthz)
+	}
+	if strings.Contains(controlPlaneAuthz, "probe-client") {
+		t.Errorf("control-plane AuthorizationPolicy must not authorize the declared consumer:\n%s", controlPlaneAuthz)
+	}
+
+	dataPlaneSE := string(manifests.Files["apps/week-one/orders-db-neon-serviceentry.yaml"])
+	if !strings.Contains(dataPlaneSE, "number: 5432") {
+		t.Errorf("data-plane ServiceEntry does not carry port 5432:\n%s", dataPlaneSE)
+	}
+	if strings.Contains(dataPlaneSE, "443") {
+		t.Errorf("data-plane ServiceEntry must not carry the control-plane port 443:\n%s", dataPlaneSE)
+	}
+
+	dataPlaneAuthz := string(manifests.Files["apps/week-one/orders-db-neon-egress-authorizationpolicy.yaml"])
+	if !strings.Contains(dataPlaneAuthz, "cluster.local/ns/week-one/sa/probe-client") {
+		t.Errorf("data-plane AuthorizationPolicy does not authorize the declared consumer:\n%s", dataPlaneAuthz)
+	}
+	if strings.Contains(dataPlaneAuthz, "tf-runner") {
+		t.Errorf("data-plane AuthorizationPolicy must not authorize tf-runner:\n%s", dataPlaneAuthz)
+	}
+}
+
+// TestEmitManagedPlacementAlwaysCompilesControlPlaneEgress proves the
+// provisioner's control-plane edge is implied by placement: managed
+// itself, not by allowedConsumers (the live-caught bug's root cause,
+// egress.go's neonControlPlaneHost doc comment): even the harness's own
+// managed-without-consumers shape (mirrored from
+// examples/week-three/harness-variant/stack.yaml) still compiles the
+// waypoint and the control-plane ServiceEntry/AuthorizationPolicy.
+func TestEmitManagedPlacementAlwaysCompilesControlPlaneEgress(t *testing.T) {
+	stack := domain.Stack{
+		Name: "harness-variant",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:        "widgets-db",
+				Placement:   domain.PlacementManaged,
+				Credentials: domain.SecretRef{Name: "widgets-db-app"},
+			},
+		},
+	}
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+	for _, want := range []string{
+		"apps/harness-variant/waypoint.yaml",
+		"apps/harness-variant/neon-control-plane-serviceentry.yaml",
+		"apps/harness-variant/neon-control-plane-egress-authorizationpolicy.yaml",
+	} {
+		if _, ok := manifests.Files[want]; !ok {
+			t.Errorf("expected %s to be compiled for a managed component with no declared consumers, got %v", want, sortedKeys(manifests.Files))
+		}
 	}
 }
 
