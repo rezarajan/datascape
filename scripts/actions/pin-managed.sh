@@ -36,10 +36,13 @@ EXPECT_FILE="$MANAGED_OUT/apps/$MANAGED_NAMESPACE/$MANAGED_COMPONENT-neon-servic
 rm -f "$PINNED_STACK"
 
 log "pin ceremony: republish the pinned output through the same git source"
+PRE_PIN_REVISION="$(kubectl get gitrepository d7s -n flux-system -o jsonpath='{.status.artifact.revision}')"
 git-source
 
 log "pin ceremony: flux reconciles the pinned revision"
 flux reconcile source git d7s -n flux-system >/dev/null
-flux reconcile kustomization "$MANAGED_NAMESPACE" -n flux-system >/dev/null 2>&1 || true
+poll "git source serves the pinned revision (artifact revision changed)" bash -c \
+	"[ \"\$(kubectl get gitrepository d7s -n flux-system -o jsonpath='{.status.artifact.revision}')\" != '$PRE_PIN_REVISION' ]"
+flux reconcile kustomization "$MANAGED_NAMESPACE" -n flux-system --with-source >/dev/null 2>&1 || true
 poll "pinned exact-host ServiceEntry applied by flux" bash -c \
 	"kubectl get serviceentry $MANAGED_COMPONENT-neon -n $MANAGED_NAMESPACE >/dev/null 2>&1"

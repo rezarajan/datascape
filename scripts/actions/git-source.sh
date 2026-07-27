@@ -110,5 +110,13 @@ git -C "$GITCONTENT_DIR/repo" -c user.email=harness@d7s.dev -c user.name=d7s-har
 # to match the target path exactly (no trailing-slash "copy contents"
 # ambiguity to get wrong).
 git clone --bare -q "$GITCONTENT_DIR/repo" "$GITCONTENT_DIR/d7s.git"
+# Clean-slate the served repo before every publish: each publish is a
+# FRESH, unrelated history (git init above), and tar-overlaying a new
+# bare repo onto an old one (kubectl cp merges, never replaces) left the
+# old packed-refs/objects mixed with the new — source-controller kept
+# fetching the pre-publish revision (found live, 2026-07-27: the pin
+# ceremony's republished revision never produced a NewArtifact; CI run
+# 30301385471).
+kubectl exec -n "$GITSERVER_NS" "$GITSERVER_POD" -- rm -rf /srv/git/d7s.git
 kubectl cp "$GITCONTENT_DIR/d7s.git" "$GITSERVER_NS/$GITSERVER_POD:/srv/git/d7s.git"
 rm -rf "$GITCONTENT_DIR"
