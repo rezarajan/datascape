@@ -133,6 +133,32 @@ export SKIP_EXIT_CODE=75
 
 log() { printf '\n==> %s\n' "$1"; }
 
+_poll_timeout_diagnostics() {
+	# The waypoint/Gateway-API CRD blocker (see require_gateway_api_prereq)
+	# took two identical CI reds and an out-of-band live repro on a
+	# throwaway kind cluster to diagnose - poll_n's own TIMEOUT line names
+	# only the wait's description, nothing about cluster-side state, and
+	# by the time a human goes looking the orchestrator's EXIT trap has
+	# already torn the cluster down. Dump bounded, clearly-labeled state
+	# right here, before that happens - this is a timeout diagnostic, not
+	# the check itself: every command is best-effort (`|| true`) so a
+	# cluster that's unreachable for the SAME reason the wait timed out
+	# reports as exactly that, never a second, louder failure that
+	# obscures the first.
+	{
+		echo "--- timeout diagnostics (bounded, best-effort) ---"
+		if command -v flux >/dev/null 2>&1; then
+			echo "-- flux get kustomizations -A --"
+			flux get kustomizations -A 2>&1 || true
+			echo "-- flux get helmreleases -A --"
+			flux get helmreleases -A 2>&1 || true
+		fi
+		echo "-- kubectl get events -A --sort-by=.lastTimestamp (last 30) --"
+		kubectl get events -A --sort-by=.lastTimestamp 2>&1 | tail -n 30 || true
+		echo "--- end timeout diagnostics ---"
+	} >&2
+}
+
 poll_n() {
 	# poll_n <attempts> <interval> <description> <command...> - the
 	# general form: retries under an honest bounded deadline sized to
@@ -153,6 +179,7 @@ poll_n() {
 		sleep "$interval"
 	done
 	echo "TIMEOUT waiting for: $desc" >&2
+	_poll_timeout_diagnostics
 	return 1
 }
 
