@@ -71,6 +71,46 @@ plan closes.
    (the standing rule); the manual route verified by a human-shaped walkthrough,
    not just the harness.
 
+## Wildcard-egress finding round — 2026-07-27 (→ Revision 2: exact-host pinning)
+
+Slice 3's live run, the steward's direct experiment, and dispatched upstream
+research established (receipts in TASK_PROGRESS and the research record): Istio
+1.30 waypoints do not program wildcard TLS ServiceEntries — the capability is
+alpha behind the mesh-wide default-off istiod flag
+`ENABLE_WILDCARD_HOST_SERVICE_ENTRIES_FOR_TLS`, which upstream marks "not
+production ready, susceptible to SNI spoofing, trusted clients only." The
+compiled wildcard data-plane edge therefore fails CLOSED (all identities denied
+— safe, not correct). The exact-host path is proven live (the provisioner's
+console.neon.tech:443 edge works through the same waypoint). Both Postgres
+negotiation modes were tested empirically (legacy and sslnegotiation=direct);
+the failure is route-absence, not SNI timing.
+
+Owner decision, verbatim: **"Exact-host pinning only"** — whose option text read:
+*"No alpha flag. The declaration gains the pinned endpoint host; until pinned,
+d7s refuses the consumer data-plane edge with the remedy (provision, read the
+endpoint, pin, recompile). Contract-pure and stable-semantics, but first-compile
+consumers can't connect through the mesh — a two-step ceremony on every new
+managed component."*
+
+**Revision 2 synthesis (supersedes the wildcard data-plane design):**
+
+- The managed component's schema gains an optional pinned endpoint host (the
+  value the operator reads from the written-outputs secret after first
+  provisioning). `allowedConsumers` on a managed component WITHOUT the pin
+  REFUSES compilation, remedy naming the ceremony. With the pin: an exact-host
+  ServiceEntry (proven semantics, host-precise — strictly stronger than the
+  wildcard's domain precision) + the consumer authorization at 5432.
+- The wildcard `*.neon.tech` data-plane ServiceEntry is REMOVED from compiled
+  output (no inert or alpha-gated objects). The control-plane edge
+  (console.neon.tech:443, tf-runner-only) is unchanged and proven.
+- The acceptance harness DEMONSTRATES the documented ceremony live: compile
+  without consumers → deliver → read the endpoint host → pin → recompile →
+  redeliver → consumer probe through the mesh succeeds; undeclared workload
+  refused at the exact-host entry. The ceremony is the documented flow (rule 41),
+  not a hidden workaround.
+- The alpha flag path is recorded as evaluated and declined (security posture:
+  no best-effort tier); revisit only when upstream graduates the feature.
+
 ## Explicitly NOT this week (deferred with a home)
 
 Boundary probes beyond egress (import ceremony, v2+); compiled MinIO/object-store
