@@ -73,39 +73,52 @@ const (
 	serviceEntryTargetRefGroup = "networking.istio.io"
 	serviceEntryTargetRefKind  = "ServiceEntry"
 
-	// neonWildcardHost and neonPostgresPort are the honest compile-time
-	// limit of the managed/Neon egress case (design question the plan
-	// flagged explicitly): the Neon endpoint host a managed component's
-	// Terraform CR provisions is NOT known at compile time — it is
-	// written to the component's credentials Secret only after
-	// tofu-controller reconciles (terraform.go's
-	// TerraformWriteOutputsToSecret). d7s never reads that Secret (rule
-	// 51), so it cannot pin the exact host into a ServiceEntry. What IS
-	// knowable at compile time, honestly, is the provider's own domain:
-	// every Neon endpoint is a subdomain of neon.tech
-	// (ep-<name>.<region>.aws.neon.tech, verified against Neon's own
-	// connection docs, 2026-07-26). Compiling a domain-pattern
-	// ServiceEntry — never a fabricated specific host — is what
-	// "declare + deny" can honestly mean here: the compiled allow-list
-	// still enforces identity (only the declared consumer principals may
-	// reach anything under this domain through the waypoint), but its
-	// SCOPE is the provider's whole domain rather than the one
-	// provisioned endpoint. That is a disclosed precision limit, not a
-	// best-effort security tier (rule 50) — the enforcement itself
-	// (default-deny, identity-scoped allow) is not weakened, only its
-	// destination granularity, and only because the exact destination is
-	// genuinely runtime-bound information no compile-time artifact can
-	// honestly claim to know. Resolution: DYNAMIC_DNS is required for a
-	// wildcard host to route at all in ambient mode (verified against
-	// istio.io/latest/blog/2026/egress-dynamic-dns/, 2026-07-26) — Envoy
-	// resolves each connection's actual backend from the TLS SNI it
-	// presents, which is why this ServiceEntry's port is typed TLS
-	// rather than opaque TCP. Open item for the live harness (slice 3,
-	// not this slice): whether a libpq client's post-SSLRequest TLS
-	// handshake presents SNI early enough for Envoy's dynamic
-	// forward proxy to route on it is an empirical question this slice
-	// does not verify — flagged here rather than assumed.
-	neonWildcardHost = "*.neon.tech"
+	// neonPostgresPort is Neon's connection proxy's fixed listening port
+	// (verified against Neon's own connection docs, 2026-07-26 — the
+	// provider exposes no separate port attribute because there is only
+	// ever one, the same fact neonConfigTemplate's "port" output in
+	// terraform.go hard-codes).
+	//
+	// SUPERSEDED DESIGN, recorded not deleted (this constant used to sit
+	// beside a neonWildcardHost = "*.neon.tech" constant and a
+	// domain-pattern ServiceEntry design — the honest compile-time limit
+	// this file originally chose because the Neon endpoint host a
+	// managed component's Terraform CR provisions is NOT known at
+	// compile time, only after tofu-controller reconciles and writes it
+	// to the credentials Secret (terraform.go's
+	// TerraformWriteOutputsToSecret), and d7s never reads that Secret
+	// itself (rule 51)):
+	//
+	// 2026-07-27 finding (week-four plan → Revision 2): the domain-
+	// pattern design does not actually work. Istio 1.30 ambient
+	// waypoints do not program wildcard TLS ServiceEntries — the
+	// capability (wildcard host + DYNAMIC_DNS resolution) is alpha,
+	// gated behind istiod's mesh-wide default-off
+	// ENABLE_WILDCARD_HOST_SERVICE_ENTRIES_FOR_TLS flag, which upstream
+	// itself marks "not production ready, susceptible to SNI spoofing,
+	// trusted clients only." A live waypoint was proven to refuse to
+	// route to the wildcard host under both Postgres TLS negotiation
+	// modes (legacy and sslnegotiation=direct) — confirmed route-
+	// absence, not an SNI-timing artifact (which the file's earlier
+	// comment here had flagged as the open empirical question; it
+	// wasn't the cause). The owner declined enabling the alpha flag —
+	// "no alpha flag" — consistent with golden rule 50 (no best-effort
+	// security tier): a flag upstream itself calls not production-ready
+	// is not a foundation for a compiled security guarantee. Revisit
+	// only if/when upstream graduates the feature.
+	//
+	// The design now is EXACT-HOST PINNING: domain.Postgres.EndpointHost
+	// (internal/domain/postgres.go) carries the operator-supplied exact
+	// endpoint host, read from the writeOutputsToSecret Secret after
+	// first provisioning. allowedConsumers on a managed component
+	// without a pin refuses at domain validation, naming the two-step
+	// ceremony (provision unpinned, deliver, read the host, pin,
+	// recompile, redeliver) — no compiled artifact ever names an
+	// unproven host. emitNeonEgress below now emits an EXACT-host
+	// ServiceEntry from pg.EndpointHost — the same proven shape
+	// neonControlPlaneHost's own console.neon.tech:443 entry already
+	// uses (plain DNS resolution, no DYNAMIC_DNS), strictly MORE precise
+	// than the retired wildcard's domain-wide scope, not less.
 	neonPostgresPort = 5432
 
 	// neonControlPlaneName, neonControlPlaneHost, and
@@ -124,16 +137,17 @@ const (
 	// whether that component also declares allowedConsumers), so it is
 	// declared wiring, not a new declaration the schema needs.
 	//
-	// Unlike neonWildcardHost (genuinely runtime-bound — the per-branch
-	// data endpoint isn't known until after provisioning), the
-	// control-plane host is NOT runtime-bound: it is the kislerdm/neon
-	// provider's fixed API base URL, https://console.neon.tech/api/v2
-	// (verified against the provider's own docs and Neon's Terraform
-	// guide, 2026-07-26 — "cf. the SDK's baseURL"). A dedicated,
-	// EXACT-host ServiceEntry is therefore both simpler and more honest
-	// than reusing the wildcard: it never needs DYNAMIC_DNS, and it
-	// never widens what the wildcard SE's own per-component consumers
-	// are allowed to reach. Compiled once per stack (like emitWaypoint
+	// Unlike the per-branch data-plane endpoint (domain.Postgres.
+	// EndpointHost — genuinely runtime-bound, only known after
+	// provisioning), the control-plane host is NOT runtime-bound: it is
+	// the kislerdm/neon provider's fixed API base URL,
+	// https://console.neon.tech/api/v2 (verified against the provider's
+	// own docs and Neon's Terraform guide, 2026-07-26 — "cf. the SDK's
+	// baseURL"). This dedicated, EXACT-host ServiceEntry was, and
+	// remains, simpler and more honest than the now-retired wildcard
+	// design ever was: it never needs DYNAMIC_DNS, and it never widens
+	// what a data-plane consumer is allowed to reach. Compiled once per
+	// stack (like emitWaypoint
 	// and emitManagedRunnerRBAC) rather than once per managed
 	// component: the tf-runner ServiceAccount is itself shared across
 	// every managed component in a stack (emitManagedRunnerRBAC), so a
@@ -462,12 +476,23 @@ func emitBackupEgress(files map[string][]byte, stackName string, t backupEgressT
 	return set(files, fmt.Sprintf("apps/%s/%s-egress-authorizationpolicy.yaml", stackName, t.ExternalName), authz)
 }
 
-// emitNeonEgress compiles a managed component's egress triple: the
-// domain-pattern ServiceEntry documented at neonWildcardHost's doc
-// comment, and the AuthorizationPolicy scoping access to exactly its
-// declared allowedConsumers — the un-refusal this slice ships (week-four
-// plan, slice 2).
+// emitNeonEgress compiles a managed component's egress triple: an
+// EXACT-host ServiceEntry naming pg.EndpointHost (week-four plan,
+// 2026-07-27 finding → Revision 2 — see neonPostgresPort's doc comment
+// for why this superseded the original domain-pattern design), and the
+// AuthorizationPolicy scoping access to exactly its declared
+// allowedConsumers. Only ever called for a pg with len(AllowedConsumers)
+// > 0 (neonEgressTargets), and domain validation refuses that
+// combination whenever EndpointHost is empty (internal/domain/
+// postgres.go) — so the empty check below is a defect guard, not a
+// reachable compile-time branch under a correctly validated Stack.
 func emitNeonEgress(files map[string][]byte, stackName string, pg domain.Postgres) error {
+	if pg.EndpointHost == "" {
+		return fmt.Errorf(
+			"flux emitter: managed component %q declares allowedConsumers with no endpointHost — this is a defect (domain validation should have caught it)",
+			pg.Name)
+	}
+
 	seName := pg.Name + "-neon"
 
 	seLabels := ownershipLabels(stackName, pg.Name)
@@ -481,12 +506,17 @@ func emitNeonEgress(files map[string][]byte, stackName string, pg domain.Postgre
 			Labels:    seLabels,
 		},
 		Spec: ServiceEntrySpec{
-			Hosts:    []string{neonWildcardHost},
+			Hosts:    []string{pg.EndpointHost},
 			Location: "MESH_EXTERNAL",
 			Ports: []ServiceEntryPort{
 				{Number: neonPostgresPort, Name: "postgres-tls", Protocol: "TLS"},
 			},
-			Resolution: "DYNAMIC_DNS",
+			// The host is now the operator-pinned exact endpoint (never
+			// a wildcard — see neonPostgresPort's doc comment), so plain
+			// per-lookup DNS resolution is the honest, simplest choice —
+			// the same shape neonControlPlaneHost's own entry already
+			// proved live.
+			Resolution: "DNS",
 		},
 	}
 	if err := set(files, fmt.Sprintf("apps/%s/%s-serviceentry.yaml", stackName, seName), se); err != nil {
@@ -548,11 +578,12 @@ func emitNeonControlPlaneEgress(files map[string][]byte, stackName string) error
 			Ports: []ServiceEntryPort{
 				{Number: neonControlPlanePort, Name: "https", Protocol: "TLS"},
 			},
-			// The control-plane host is a fixed, known constant (not a
-			// wildcard like neonWildcardHost), so plain per-lookup DNS
-			// resolution is the honest, simplest choice — DYNAMIC_DNS
-			// exists specifically for wildcard hosts this SE does not
-			// declare.
+			// The control-plane host is a fixed, known constant (never a
+			// wildcard), so plain per-lookup DNS resolution is the
+			// honest, simplest choice — DYNAMIC_DNS exists specifically
+			// for wildcard hosts this SE does not declare (the same
+			// resolution the pinned data-plane ServiceEntry now uses
+			// too — see emitNeonEgress).
 			Resolution: "DNS",
 		},
 	}

@@ -476,6 +476,21 @@ fix in flight; slice 3 re-runs managed live after. Self-hosted half already
 green: backup through the waypoint, undeclared identity refused with
 diagnostics.
 
+## Design finding: wildcard egress unprogrammed by ambient waypoints (2026-07-27)
+
+Steward-run experiment on the debug cluster (implementer stalled; two-command
+diagnosis run directly): legacy Postgres negotiation fails (SSLRequest bytes,
+waypoint kills), direct TLS (sslnegotiation=direct, SNI-first) ALSO fails —
+ztunnel shows probe traffic reaching the waypoint and closed in 1ms both modes;
+istioctl proxy-config proves the waypoint has cluster+route for the exact-host
+console.neon.tech:443 SE and NOTHING for the wildcard *.neon.tech:5432
+DYNAMIC_DNS SE. Istio 1.30.3 does not program wildcard SEs into waypoints. The
+compiled data-plane edge fails CLOSED (denied for everyone — safe, not correct:
+declared consumers should pass). Control-plane edge (443) fully proven live.
+Upstream research dispatched (support matrix, blessed ambient egress patterns
+for dynamic hosts); design decision round to follow with facts. Self-hosted
+egress proof complete and green.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by

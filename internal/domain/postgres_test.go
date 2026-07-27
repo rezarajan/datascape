@@ -79,17 +79,124 @@ func TestPostgresValidateMTLSRefusalAggregatesWithOtherErrors(t *testing.T) {
 
 // TestPostgresValidateAllowedConsumersCompilesOnManagedPlacement proves
 // the un-refusal (week-four plan, slice 2): allowedConsumers +
-// placement: managed no longer refuses at domain validation — its
-// enforcement point is now egress compilation's waypoint-bound
-// ServiceEntry AuthorizationPolicy (internal/adapters/flux/egress.go),
-// which does cover a managed placement, so it needs no guarantees.mtls
-// companion (mtls itself still refuses independently on managed
-// placement — see TestPostgresValidateMTLSRefusedOnManagedPlacement).
+// placement: managed no longer refuses at domain validation for lack of
+// guarantees.mtls — its enforcement point is now egress compilation's
+// waypoint-bound ServiceEntry AuthorizationPolicy (internal/adapters/
+// flux/egress.go), which does cover a managed placement, so it needs no
+// guarantees.mtls companion (mtls itself still refuses independently on
+// managed placement — see TestPostgresValidateMTLSRefusedOnManagedPlacement).
+// It DOES still need endpointHost pinned (2026-07-27 finding → Revision
+// 2 — TestPostgresValidateAllowedConsumersOnManagedWithoutEndpointHostRefused
+// pins that refusal specifically).
 func TestPostgresValidateAllowedConsumersCompilesOnManagedPlacement(t *testing.T) {
 	p := validPostgres()
 	p.Placement = domain.PlacementManaged
 	p.Guarantees.MTLS = nil
 	p.AllowedConsumers = []domain.AllowedConsumer{{ServiceAccount: "probe-client"}}
+	p.EndpointHost = "ep-cool-glade-12345678.us-east-2.aws.neon.tech"
+	if errs := p.Validate(); len(errs) != 0 {
+		t.Fatalf("expected no errors, got %v", errs)
+	}
+}
+
+// TestPostgresValidateAllowedConsumersOnManagedWithoutEndpointHostRefused
+// pins the 2026-07-27 finding's refusal (week-four plan → Revision 2,
+// supersedes the wildcard domain-pattern design): a managed component
+// with declared consumers but no pinned endpointHost refuses, carrying
+// the full two-step ceremony as its remedy (golden rule 35).
+func TestPostgresValidateAllowedConsumersOnManagedWithoutEndpointHostRefused(t *testing.T) {
+	p := validPostgres()
+	p.Placement = domain.PlacementManaged
+	p.Guarantees.MTLS = nil
+	p.AllowedConsumers = []domain.AllowedConsumer{{ServiceAccount: "probe-client"}}
+	errs := p.Validate()
+	if len(errs) != 1 {
+		t.Fatalf("expected exactly 1 error, got %v", errs)
+	}
+	got := errs[0].Error()
+	if !strings.Contains(got, "allowedConsumers declared without endpointHost") {
+		t.Errorf("error %q does not name the boundary", got)
+	}
+	for _, step := range []string{
+		"compile this component without allowedConsumers",
+		"deliver it",
+		`read the "host" key from the Secret named by credentials.secretRef.name`,
+		"add endpointHost:",
+		"recompile and redeliver",
+	} {
+		if !strings.Contains(got, step) {
+			t.Errorf("error %q does not carry ceremony step %q (golden rule 35)", got, step)
+		}
+	}
+}
+
+// TestPostgresValidateEndpointHostOnlySelfHostedRefused proves
+// endpointHost is refused on placement: self-hosted (rule 37 — a
+// schema-accepted field nothing consumes is a defect: only the managed
+// emitter's exact-host ServiceEntry ever reads it).
+func TestPostgresValidateEndpointHostOnlySelfHostedRefused(t *testing.T) {
+	p := validPostgres()
+	p.EndpointHost = "ep-cool-glade-12345678.us-east-2.aws.neon.tech"
+	errs := p.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "endpointHost only applies to placement: managed") {
+		t.Fatalf("expected an endpointHost-placement error, got %v", errs)
+	}
+}
+
+// TestPostgresValidateEndpointHostRejectsScheme proves a URL (with a
+// scheme) refuses — endpointHost must be a bare hostname.
+func TestPostgresValidateEndpointHostRejectsScheme(t *testing.T) {
+	p := validPostgres()
+	p.Placement = domain.PlacementManaged
+	p.Guarantees.MTLS = nil
+	p.EndpointHost = "https://ep-cool-glade-12345678.us-east-2.aws.neon.tech"
+	errs := p.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "must be a bare hostname, not a URL") {
+		t.Fatalf("expected a scheme-rejection error, got %v", errs)
+	}
+}
+
+// TestPostgresValidateEndpointHostRejectsPortOrPath proves a port or
+// path suffix refuses — endpointHost must be a bare hostname.
+func TestPostgresValidateEndpointHostRejectsPortOrPath(t *testing.T) {
+	for _, host := range []string{
+		"ep-cool-glade-12345678.us-east-2.aws.neon.tech:5432",
+		"ep-cool-glade-12345678.us-east-2.aws.neon.tech/path",
+	} {
+		p := validPostgres()
+		p.Placement = domain.PlacementManaged
+		p.Guarantees.MTLS = nil
+		p.EndpointHost = host
+		errs := p.Validate()
+		if len(errs) != 1 || !strings.Contains(errs[0].Error(), "must be a bare hostname with no port or path") {
+			t.Fatalf("host %q: expected a port/path-rejection error, got %v", host, errs)
+		}
+	}
+}
+
+// TestPostgresValidateEndpointHostRejectsOutsideProviderDomain proves a
+// pin outside neon.tech refuses (golden rules 34, 50 — no arbitrary
+// hostname can honestly compile as a Neon endpoint pin).
+func TestPostgresValidateEndpointHostRejectsOutsideProviderDomain(t *testing.T) {
+	p := validPostgres()
+	p.Placement = domain.PlacementManaged
+	p.Guarantees.MTLS = nil
+	p.EndpointHost = "evil.example.com"
+	errs := p.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "is outside neon.tech") {
+		t.Fatalf("expected an outside-provider-domain error, got %v", errs)
+	}
+}
+
+// TestPostgresValidateEndpointHostAcceptsValidPin proves the same
+// declaration, with a well-formed neon.tech-suffixed bare host and no
+// declared consumers, validates cleanly (rule 49: the check shown able
+// to fail and pass).
+func TestPostgresValidateEndpointHostAcceptsValidPin(t *testing.T) {
+	p := validPostgres()
+	p.Placement = domain.PlacementManaged
+	p.Guarantees.MTLS = nil
+	p.EndpointHost = "ep-cool-glade-12345678.us-east-2.aws.neon.tech"
 	if errs := p.Validate(); len(errs) != 0 {
 		t.Fatalf("expected no errors, got %v", errs)
 	}

@@ -128,26 +128,101 @@ func TestLoadManagedPlacementWithoutGuaranteesCompiles(t *testing.T) {
 }
 
 // TestLoadManagedPlacementWithMTLSFailsDomainValidationButAllowedConsumersCompiles
-// proves the schema still structurally accepts guarantees.mtls and
-// allowedConsumers alongside placement: managed (golden rule 34's
-// "schema-accepted, refused loudly" shape, not a parse-time rejection),
-// and that domain validation still refuses guarantees.mtls there — but,
-// since the week-four plan's un-refusal, allowedConsumers alongside it no
-// longer contributes a second error: its own enforcement point is now
-// egress compilation (internal/adapters/flux/egress.go), which does
-// cover managed placement.
+// proves the schema still structurally accepts guarantees.mtls,
+// allowedConsumers, and endpointHost alongside placement: managed
+// (golden rule 34's "schema-accepted, refused loudly" shape, not a
+// parse-time rejection), and that domain validation still refuses
+// guarantees.mtls there — but, since the week-four plan's un-refusal,
+// allowedConsumers alongside it no longer contributes a second error
+// once endpointHost is pinned: its own enforcement point is now egress
+// compilation (internal/adapters/flux/egress.go), which does cover
+// managed placement (2026-07-27 finding → Revision 2: only once the
+// exact-host pin is present — see the loader tests below for the
+// un-pinned refusal).
 func TestLoadManagedPlacementWithMTLSFailsDomainValidationButAllowedConsumersCompiles(t *testing.T) {
 	doc := strings.Replace(validDoc, "placement: self-hosted", "placement: managed", 1)
+	doc = strings.Replace(doc, "allowedConsumers:",
+		"endpointHost: ep-cool-glade-12345678.us-east-2.aws.neon.tech\n    allowedConsumers:", 1)
 	stack, err := yaml.New().Load([]byte(doc))
 	if err != nil {
 		t.Fatalf("expected the schema to accept placement: managed structurally, got parse error: %v", err)
 	}
 	errs := stack.Validate()
 	if len(errs) != 1 {
-		t.Fatalf("expected exactly 1 aggregated error (mtls only — allowedConsumers now compiles on managed placement), got %v", errs)
+		t.Fatalf("expected exactly 1 aggregated error (mtls only — allowedConsumers now compiles on managed placement once pinned), got %v", errs)
 	}
 	if !strings.Contains(errs[0].Error(), "guarantees.mtls + placement: managed refuses to compile") {
 		t.Errorf("aggregated errors %v do not include the mtls refusal", errs)
+	}
+}
+
+// TestLoadAllowedConsumersOnManagedWithoutEndpointHostRefused proves the
+// loader forwards allowedConsumers without a pinned endpointHost through
+// to domain validation's own refusal (2026-07-27 finding → Revision 2) —
+// the schema accepts it structurally, domain validation refuses it with
+// the ceremony remedy.
+func TestLoadAllowedConsumersOnManagedWithoutEndpointHostRefused(t *testing.T) {
+	doc := strings.Replace(validDoc, "placement: self-hosted", "placement: managed", 1)
+	stack, err := yaml.New().Load([]byte(doc))
+	if err != nil {
+		t.Fatalf("expected the schema to accept placement: managed structurally, got parse error: %v", err)
+	}
+	errs := stack.Validate()
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "allowedConsumers declared without endpointHost") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected an allowedConsumers-without-endpointHost error, got %v", errs)
+	}
+}
+
+// TestLoadEndpointHostOutsideProviderDomainRefused proves the loader
+// forwards endpointHost through to domain validation's provider-domain
+// suffix check (2026-07-27 finding → Revision 2).
+func TestLoadEndpointHostOutsideProviderDomainRefused(t *testing.T) {
+	doc := strings.Replace(managedDoc, "name: orders-db-app",
+		"name: orders-db-app\n    endpointHost: evil.example.com", 1)
+	stack, err := yaml.New().Load([]byte(doc))
+	if err != nil {
+		t.Fatalf("expected the schema to accept endpointHost structurally, got parse error: %v", err)
+	}
+	errs := stack.Validate()
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "is outside neon.tech") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected an outside-provider-domain error, got %v", errs)
+	}
+}
+
+// TestLoadEndpointHostPinCompiles proves the full pinned shape (managed
+// placement, allowedConsumers, and a well-formed endpointHost) parses
+// and validates cleanly end to end (rule 49: the check shown able to
+// fail and pass, paired with TestLoadAllowedConsumersOnManagedWithoutEndpointHostRefused
+// and TestLoadEndpointHostOutsideProviderDomainRefused above).
+func TestLoadEndpointHostPinCompiles(t *testing.T) {
+	doc := strings.Replace(managedDoc, "name: orders-db-app",
+		"name: orders-db-app\n    endpointHost: ep-cool-glade-12345678.us-east-2.aws.neon.tech\n"+
+			"    allowedConsumers:\n      - serviceAccount: probe-client", 1)
+	stack, err := yaml.New().Load([]byte(doc))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	pg, ok := stack.Components[0].(domain.Postgres)
+	if !ok {
+		t.Fatalf("component type = %T, want domain.Postgres", stack.Components[0])
+	}
+	if pg.EndpointHost != "ep-cool-glade-12345678.us-east-2.aws.neon.tech" {
+		t.Errorf("endpointHost = %q, unexpected", pg.EndpointHost)
+	}
+	if errs := stack.Validate(); len(errs) != 0 {
+		t.Errorf("expected the loaded stack to validate cleanly, got %v", errs)
 	}
 }
 

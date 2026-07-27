@@ -1,19 +1,18 @@
 apiVersion: networking.istio.io/v1
 kind: ServiceEntry
 metadata:
-  name: orders-db-neon
+  name: neon-control-plane
   namespace: week-one
   labels:
-    d7s.dev/component: orders-db
     d7s.dev/managed-by: d7s
     d7s.dev/stack: week-one
     istio.io/use-waypoint: waypoint
 spec:
   hosts:
-    - ep-cool-glade-12345678.us-east-2.aws.neon.tech
+    - console.neon.tech
   location: MESH_EXTERNAL
   ports:
-    - number: 5432
-      name: postgres-tls
+    - number: 443
+      name: https
       protocol: TLS
   resolution: DNS

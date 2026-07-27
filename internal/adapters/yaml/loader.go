@@ -60,6 +60,12 @@ type rawComponent struct {
 	Credentials      *rawCredentials      `yaml:"credentials"`
 	Guarantees       *rawGuarantees       `yaml:"guarantees"`
 	AllowedConsumers []rawAllowedConsumer `yaml:"allowedConsumers"`
+	// EndpointHost is domain.Postgres.EndpointHost's raw form (week-four
+	// plan, 2026-07-27 finding → Revision 2): a plain string, structural
+	// validation (bare hostname, provider-domain suffix) happens in
+	// domain.Postgres.Validate, not here — no parse-time error can arise
+	// from a bare string field.
+	EndpointHost string `yaml:"endpointHost"`
 }
 
 type rawAllowedConsumer struct {
@@ -150,8 +156,9 @@ func (l *Loader) Load(raw []byte) (domain.Stack, error) {
 func toPostgres(rc rawComponent) (domain.Postgres, []error) {
 	var errs []error
 	pg := domain.Postgres{
-		Name:      rc.Name,
-		Placement: domain.Placement(rc.Placement),
+		Name:         rc.Name,
+		Placement:    domain.Placement(rc.Placement),
+		EndpointHost: rc.EndpointHost,
 	}
 	if rc.Credentials != nil && rc.Credentials.SecretRef != nil {
 		pg.Credentials = domain.SecretRef{Name: rc.Credentials.SecretRef.Name}

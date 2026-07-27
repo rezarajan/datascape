@@ -534,6 +534,13 @@ func TestEmitExternalAloneEmitsNoBytes(t *testing.T) {
 	}
 }
 
+// managedExampleEndpointHost mirrors examples/week-two/managed-stack.yaml's
+// own pinned endpointHost value: a plausible EXAMPLE Neon endpoint host
+// shape (Neon's own naming convention, ep-<name>-<id>.<region>.aws.neon.tech),
+// not one this repo has actually provisioned (week-four plan, 2026-07-27
+// finding → Revision 2).
+const managedExampleEndpointHost = "ep-cool-glade-12345678.us-east-2.aws.neon.tech"
+
 // managedExampleStack mirrors examples/week-two/managed-stack.yaml, which
 // in turn mirrors examples/week-one/stack.yaml with placement flipped to
 // managed and no guarantees.mtls/rpo declared (both still refuse on
@@ -541,8 +548,36 @@ func TestEmitExternalAloneEmitsNoBytes(t *testing.T) {
 // the same declaration, only placement flipped, compiles to a different
 // artifact. AllowedConsumers is declared (week-four plan, slice 2's
 // un-refusal): egress compilation now gives it an enforcement point on
-// managed placement too (internal/adapters/flux/egress.go).
+// managed placement too (internal/adapters/flux/egress.go). This is the
+// SECOND phase of the pin ceremony (2026-07-27 finding → Revision 2) —
+// managedUnpinnedExampleStack below is the first; see its own doc
+// comment for the full two-step story examples/week-two demonstrates.
 func managedExampleStack() domain.Stack {
+	return domain.Stack{
+		Name: "week-one",
+		Components: []domain.Component{
+			domain.Postgres{
+				Name:         "orders-db",
+				Placement:    domain.PlacementManaged,
+				Credentials:  domain.SecretRef{Name: "orders-db-app"},
+				EndpointHost: managedExampleEndpointHost,
+				AllowedConsumers: []domain.AllowedConsumer{
+					{ServiceAccount: "probe-client"},
+				},
+			},
+		},
+	}
+}
+
+// managedUnpinnedExampleStack mirrors
+// examples/week-two/managed-stack-unpinned.yaml: the FIRST phase of the
+// exact-host pin ceremony (2026-07-27 finding → Revision 2) — the same
+// component, before any consumer is declared and before its endpoint is
+// known. Compiling and delivering this is how an operator obtains the
+// "host" value written-outputs secret credentials.secretRef.name
+// (orders-db-app) carries once tofu-controller reconciles, which then
+// becomes managedExampleStack's own EndpointHost pin.
+func managedUnpinnedExampleStack() domain.Stack {
 	return domain.Stack{
 		Name: "week-one",
 		Components: []domain.Component{
@@ -550,9 +585,6 @@ func managedExampleStack() domain.Stack {
 				Name:        "orders-db",
 				Placement:   domain.PlacementManaged,
 				Credentials: domain.SecretRef{Name: "orders-db-app"},
-				AllowedConsumers: []domain.AllowedConsumer{
-					{ServiceAccount: "probe-client"},
-				},
 			},
 		},
 	}
@@ -595,6 +627,69 @@ func TestEmitManagedDeterministic(t *testing.T) {
 		t.Fatalf("Emit (first): %v", err)
 	}
 	b, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (second): %v", err)
+	}
+	if len(a.Files) != len(b.Files) {
+		t.Fatalf("file count differs across compiles: %d vs %d", len(a.Files), len(b.Files))
+	}
+	for path, want := range a.Files {
+		got, ok := b.Files[path]
+		if !ok {
+			t.Fatalf("second compile is missing file %s", path)
+		}
+		if !bytes.Equal(want, got) {
+			t.Errorf("file %s is not byte-identical across compiles", path)
+		}
+	}
+}
+
+// TestEmitManagedUnpinnedGoldenFiles pins the FIRST phase of the
+// exact-host pin ceremony (week-four plan, 2026-07-27 finding → Revision
+// 2): managedUnpinnedExampleStack declares no allowedConsumers and no
+// endpointHost, so it compiles cleanly with no data-plane Neon
+// ServiceEntry/AuthorizationPolicy at all — only the namespace,
+// waypoint, Terraform CR/OpenTofu config, tf-runner RBAC, and the
+// provisioner's own control-plane egress (implied by placement: managed
+// itself, unconditionally — see neonControlPlaneHost's doc comment).
+func TestEmitManagedUnpinnedGoldenFiles(t *testing.T) {
+	manifests, err := flux.New().Emit(managedUnpinnedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+
+	want := readGoldenDir(t, filepath.Join("testdata", "golden", "managed-unpinned"))
+
+	if len(manifests.Files) != len(want) {
+		t.Fatalf("emitted %d files, golden has %d\nemitted: %v\ngolden: %v",
+			len(manifests.Files), len(want), sortedKeys(manifests.Files), sortedKeys(want))
+	}
+	for path, wantBytes := range want {
+		gotBytes, ok := manifests.Files[path]
+		if !ok {
+			t.Errorf("golden file %s was not emitted", path)
+			continue
+		}
+		if !bytes.Equal(gotBytes, wantBytes) {
+			t.Errorf("emitted %s differs from golden:\n--- got ---\n%s\n--- want ---\n%s", path, gotBytes, wantBytes)
+		}
+	}
+	for path := range manifests.Files {
+		if strings.Contains(filepath.Base(path), "-neon-") {
+			t.Errorf("emitted the pinned data-plane object %s with no declared consumers and no pin", path)
+		}
+	}
+}
+
+// TestEmitManagedUnpinnedDeterministic compiles the unpinned-phase
+// declaration twice and requires byte-identical output (golden rules 22,
+// 45).
+func TestEmitManagedUnpinnedDeterministic(t *testing.T) {
+	a, err := flux.New().Emit(managedUnpinnedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (first): %v", err)
+	}
+	b, err := flux.New().Emit(managedUnpinnedExampleStack())
 	if err != nil {
 		t.Fatalf("Emit (second): %v", err)
 	}
@@ -922,9 +1017,10 @@ func TestEmitWaypointSharedAcrossBackupAndNeonEgress(t *testing.T) {
 				},
 			},
 			domain.Postgres{
-				Name:        "widgets-db",
-				Placement:   domain.PlacementManaged,
-				Credentials: domain.SecretRef{Name: "widgets-db-app"},
+				Name:         "widgets-db",
+				Placement:    domain.PlacementManaged,
+				Credentials:  domain.SecretRef{Name: "widgets-db-app"},
+				EndpointHost: "ep-widgets-87654321.us-east-2.aws.neon.tech",
 				AllowedConsumers: []domain.AllowedConsumer{
 					{ServiceAccount: "probe-client"},
 				},
@@ -999,21 +1095,20 @@ func TestEmitManagedWithoutAllowedConsumersEmitsControlPlaneEgressOnlyNoDataPlan
 	}
 }
 
-// TestEmitNeonEgressUsesProviderDomainPattern proves the honest
-// compile-time limit documented on neonWildcardHost (egress.go): since
-// the Neon endpoint's exact host is runtime-bound (only known after
-// tofu-controller provisions it), the compiled ServiceEntry names the
-// provider's own domain, resolved dynamically per connection — never a
-// fabricated specific host.
-func TestEmitNeonEgressUsesProviderDomainPattern(t *testing.T) {
+// TestEmitNeonEgressUsesExactHostPin proves the exact-host pinning
+// design (week-four plan, 2026-07-27 finding → Revision 2, supersedes
+// the domain-pattern design — see egress.go's neonPostgresPort doc
+// comment): the compiled ServiceEntry names pg.EndpointHost exactly,
+// resolved via plain DNS — never a wildcard, never DYNAMIC_DNS.
+func TestEmitNeonEgressUsesExactHostPin(t *testing.T) {
 	manifests, err := flux.New().Emit(managedExampleStack())
 	if err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 	se := string(manifests.Files["apps/week-one/orders-db-neon-serviceentry.yaml"])
 	for _, want := range []string{
-		"'*.neon.tech'",
-		"resolution: DYNAMIC_DNS",
+		managedExampleEndpointHost,
+		"resolution: DNS",
 		"protocol: TLS",
 		`number: 5432`,
 		"istio.io/use-waypoint: waypoint",
@@ -1021,6 +1116,9 @@ func TestEmitNeonEgressUsesProviderDomainPattern(t *testing.T) {
 		if !strings.Contains(se, want) {
 			t.Errorf("Neon ServiceEntry missing %q:\n%s", want, se)
 		}
+	}
+	if strings.Contains(se, "*.neon.tech") || strings.Contains(se, "DYNAMIC_DNS") {
+		t.Errorf("Neon ServiceEntry must not carry the retired wildcard host or DYNAMIC_DNS resolution:\n%s", se)
 	}
 	authz := string(manifests.Files["apps/week-one/orders-db-neon-egress-authorizationpolicy.yaml"])
 	if !strings.Contains(authz, "cluster.local/ns/week-one/sa/probe-client") {

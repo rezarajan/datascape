@@ -1,0 +1,24 @@
+# The FIRST phase of the exact-host pin ceremony (week-four plan,
+# 2026-07-27 finding -> Revision 2, supersedes the earlier wildcard
+# data-plane design): the same component managed-stack.yaml declares in
+# this same directory, before it has ever been provisioned - no
+# allowedConsumers, no endpointHost, because the endpoint doesn't exist
+# yet and d7s never fabricates one (rule 50: no best-effort tier).
+#
+# Compile and deliver this first. Once tofu-controller reconciles the
+# Terraform CR it provisions, read the endpoint host from the "host" key
+# of the Secret named by credentials.secretRef.name below
+# (orders-db-app). Add that value as endpointHost to managed-stack.yaml,
+# add allowedConsumers there, then recompile and redeliver THAT file -
+# d7s refuses to compile allowedConsumers on a managed component without
+# a pinned endpointHost (domain validation, naming this same ceremony).
+apiVersion: d7s.dev/v1alpha1
+kind: Stack
+name: week-one
+components:
+  - kind: postgres
+    name: orders-db
+    placement: managed
+    credentials:
+      secretRef:
+        name: orders-db-app

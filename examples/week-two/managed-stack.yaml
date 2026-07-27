@@ -1,3 +1,18 @@
+# The SECOND phase of the exact-host pin ceremony (week-four plan,
+# 2026-07-27 finding -> Revision 2, supersedes the earlier wildcard
+# data-plane design). managed-stack-unpinned.yaml in this same directory
+# is the FIRST phase - the same component, before it is ever provisioned
+# and before its endpoint host is known.
+#
+# The ceremony: compile and deliver managed-stack-unpinned.yaml first;
+# once tofu-controller reconciles the Terraform CR it provisions, read
+# the endpoint host from the "host" key of the Secret named by
+# credentials.secretRef.name below (orders-db-app) - that is the value
+# endpointHost carries here. Then recompile and redeliver THIS file. Only
+# once endpointHost is pinned does d7s compile the exact-host
+# ServiceEntry + AuthorizationPolicy declared consumers need to reach it
+# through the mesh (allowedConsumers on a managed component without the
+# pin refuses at domain validation, naming this same ceremony).
 apiVersion: d7s.dev/v1alpha1
 kind: Stack
 name: week-one
@@ -8,5 +23,10 @@ components:
     credentials:
       secretRef:
         name: orders-db-app
+    # A plausible EXAMPLE host shape (Neon's own naming convention,
+    # ep-<name>-<id>.<region>.aws.neon.tech) - not one this repo has
+    # actually provisioned. A real operator reads the real value from
+    # the written-outputs secret, as described above.
+    endpointHost: ep-cool-glade-12345678.us-east-2.aws.neon.tech
     allowedConsumers:
       - serviceAccount: probe-client
