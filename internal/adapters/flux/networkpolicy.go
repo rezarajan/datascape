@@ -2,6 +2,7 @@ package flux
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rezarajan/datascape/internal/domain"
 )
@@ -309,7 +310,7 @@ type NetworkPolicyPort struct {
 // component's tf-runner pods (see the KNOWN, DISCLOSED GAP comment's
 // 2026-07-27 addendum above, and emitCNPGControlPlaneEgress /
 // emitManagedControlPlaneEgress below).
-func emitNetworkPolicies(files map[string][]byte, stackName string, waypointPresent bool, selfHosted, managed []domain.Postgres) error {
+func emitNetworkPolicies(files map[string][]byte, stackName string, waypointPresent bool, selfHosted, managed []domain.Postgres, externals map[string]domain.External) error {
 	if err := emitDefaultDenyEgress(files, stackName); err != nil {
 		return err
 	}
@@ -329,6 +330,103 @@ func emitNetworkPolicies(files map[string][]byte, stackName string, waypointPres
 	if len(managed) > 0 {
 		if err := emitManagedControlPlaneEgress(files, stackName); err != nil {
 			return err
+		}
+	}
+	if err := emitDeclaredExternalEgress(files, stackName, selfHosted, externals); err != nil {
+		return err
+	}
+	return nil
+}
+
+// clusterLocalNamespace reports whether a declared external's endpoint
+// host is a Kubernetes cluster-local Service DNS name
+// ("<svc>.<namespace>.svc" or "<svc>.<namespace>.svc.cluster.local"),
+// and if so which namespace it names. The distinction decides how
+// precisely emitDeclaredExternalEgress below can scope its destination:
+// a cluster-local host resolves (via kube-dns, in the CLIENT pod) to a
+// Service ClusterIP whose backing pods a namespaceSelector CAN name; any
+// other host resolves outside the cluster, where NetworkPolicy has no
+// selector vocabulary at all (the same constraint apiServerPort's doc
+// comment records for the apiserver).
+func clusterLocalNamespace(host string) (string, bool) {
+	parts := strings.Split(host, ".")
+	if len(parts) >= 3 && parts[2] == "svc" {
+		switch {
+		case len(parts) == 3:
+			return parts[1], true
+		case len(parts) == 5 && parts[3] == "cluster" && parts[4] == "local":
+			return parts[1], true
+		}
+	}
+	return "", false
+}
+
+// emitDeclaredExternalEgress compiles the floor's DECLARED-WIRING edge:
+// one NetworkPolicy per (self-hosted component, declared external) pair
+// actually wired by guarantees.rpo.backupTo — Amendment 2's "allowlists
+// come only from declared wiring" made literal at this floor layer, not
+// just at the mesh layer (egress.go's ServiceEntry/AuthorizationPolicy).
+//
+// Live-caught constraint (2026-07-27, the first acceptance run under the
+// enforced floor; TASK_PROGRESS): CNPG's barman-cloud-wal-archive failed
+// (exit status 4) against the declared object store because the instance
+// pod resolves the endpoint host ITSELF via kube-dns and dials the
+// resulting ClusterIP directly — a cross-namespace TCP connection that
+// never engages the ServiceEntry's use-waypoint routing, so the floor's
+// HBONE allowance never applies and default-deny eats the declared data
+// path. The floor must therefore allow what the declaration itself
+// wired, by SOURCE pod (the component's own cnpg.io/cluster pods, the
+// same selector emitCNPGControlPlaneEgress uses) and by declared port:
+//   - cluster-local endpoint host → destination pinned to the endpoint's
+//     namespace (namespaceSelector) plus the declared port;
+//   - any other host → declared port only, destination-unrestricted —
+//     the same disclosed precision limit as controlPlaneEgressRules
+//     (no NetworkPolicy vocabulary for off-cluster destinations); host
+//     and identity precision stay enforced at the mesh layer by the
+//     compiled ServiceEntry/AuthorizationPolicy pair.
+//
+// Reuses backupEgressTargets (egress.go) so the floor and the mesh layer
+// compile from the SAME wiring derivation — one source of truth for
+// "what the declaration wired," never two lists to drift apart. Targets
+// and their Consumers both come back in declaration order, so output
+// stays byte-identical across compiles (golden rules 22, 45).
+func emitDeclaredExternalEgress(files map[string][]byte, stackName string, selfHosted []domain.Postgres, externals map[string]domain.External) error {
+	targets, err := backupEgressTargets(selfHosted, externals)
+	if err != nil {
+		return err
+	}
+	for _, t := range targets {
+		rule := NetworkPolicyEgressRule{
+			Ports: []NetworkPolicyPort{{Protocol: "TCP", Port: t.Port}},
+		}
+		if ns, ok := clusterLocalNamespace(t.Host); ok {
+			rule.To = []NetworkPolicyPeer{
+				{NamespaceSelector: &NetworkPolicyLabelSelector{
+					MatchLabels: map[string]string{namespaceNameLabel: ns},
+				}},
+			}
+		}
+		for _, consumer := range t.Consumers {
+			np := NetworkPolicy{
+				APIVersion: networkPolicyAPIVersion,
+				Kind:       "NetworkPolicy",
+				Metadata: ObjectMeta{
+					Name:      consumer + "-" + t.ExternalName + "-declared-egress",
+					Namespace: stackName,
+					Labels:    ownershipLabels(stackName, consumer),
+				},
+				Spec: NetworkPolicySpec{
+					PodSelector: NetworkPolicyLabelSelector{
+						MatchLabels: map[string]string{"cnpg.io/cluster": consumer},
+					},
+					PolicyTypes: []string{"Egress"},
+					Egress:      []NetworkPolicyEgressRule{rule},
+				},
+			}
+			path := fmt.Sprintf("apps/%s/%s-%s-networkpolicy-declared-egress.yaml", stackName, consumer, t.ExternalName)
+			if err := set(files, path, np); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -1292,6 +1292,76 @@ func TestEmitNetworkPolicyFloorForMeshEnrolledNamespace(t *testing.T) {
 	}
 }
 
+// TestEmitDeclaredExternalEgressScopesClusterLocalEndpoint proves the
+// floor's declared-wiring edge (Amendment 2's "allowlists come only from
+// declared wiring", compiled at the NetworkPolicy layer after the
+// live-caught barman-cloud-wal-archive failure, 2026-07-27): a component
+// wiring guarantees.rpo.backupTo to an external whose endpoint is a
+// cluster-local Service DNS name gets exactly one egress allowance —
+// its own cnpg.io/cluster pods, to the endpoint's namespace, on the
+// declared port, nothing broader.
+func TestEmitDeclaredExternalEgressScopesClusterLocalEndpoint(t *testing.T) {
+	manifests, err := flux.New().Emit(exampleStack())
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+
+	policy := string(manifests.Files["apps/week-one/orders-db-backups-networkpolicy-declared-egress.yaml"])
+	if policy == "" {
+		t.Fatalf("declared-egress policy was not emitted; files: %v", sortedKeys(manifests.Files))
+	}
+	for _, want := range []string{
+		"cnpg.io/cluster: orders-db",
+		"kubernetes.io/metadata.name: d7s-harness-minio",
+		"port: 9000",
+	} {
+		if !strings.Contains(policy, want) {
+			t.Errorf("declared-egress policy missing %q:\n%s", want, policy)
+		}
+	}
+	if strings.Contains(policy, "port: 443") || strings.Contains(policy, "port: 6443") {
+		t.Errorf("declared-egress policy must not duplicate the control-plane edge:\n%s", policy)
+	}
+}
+
+// TestEmitDeclaredExternalEgressExternalHostIsPortScopedOnly proves the
+// disclosed precision limit for a NON-cluster-local endpoint host (the
+// same limit controlPlaneEgressRules documents): NetworkPolicy has no
+// selector vocabulary for off-cluster destinations, so the compiled
+// allowance carries the declared port with no To peer — host and
+// identity precision stay at the mesh layer's ServiceEntry/
+// AuthorizationPolicy pair.
+func TestEmitDeclaredExternalEgressExternalHostIsPortScopedOnly(t *testing.T) {
+	stack := exampleStack()
+	stack.Externals = []domain.External{{
+		Name: "backups",
+		ObjectStore: &domain.ObjectStoreExternal{
+			Endpoint:    "https://s3.example.com:9443",
+			Bucket:      "d7s-backups",
+			Credentials: domain.SecretRef{Name: "backups-credentials"},
+		},
+	}}
+
+	manifests, err := flux.New().Emit(stack)
+	if err != nil {
+		t.Fatalf("Emit: %v", err)
+	}
+
+	policy := string(manifests.Files["apps/week-one/orders-db-backups-networkpolicy-declared-egress.yaml"])
+	if policy == "" {
+		t.Fatalf("declared-egress policy was not emitted; files: %v", sortedKeys(manifests.Files))
+	}
+	if !strings.Contains(policy, "port: 9443") {
+		t.Errorf("declared-egress policy missing the declared port:\n%s", policy)
+	}
+	if strings.Contains(policy, "namespaceSelector") {
+		t.Errorf("declared-egress policy for an off-cluster host must not carry a namespaceSelector:\n%s", policy)
+	}
+	if !strings.Contains(policy, "cnpg.io/cluster: orders-db") {
+		t.Errorf("declared-egress policy must stay scoped to the wiring component's pods:\n%s", policy)
+	}
+}
+
 // TestEmitNetworkPoliciesCarryOwnershipLabels proves all compiled
 // NetworkPolicy objects — including the Revision 4 (2026-07-27,
 // week-four plan, Control-plane-edge round) CNPG-scoped control-plane
