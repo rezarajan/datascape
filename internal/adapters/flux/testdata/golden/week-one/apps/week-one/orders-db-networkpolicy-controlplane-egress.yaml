@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: orders-db-controlplane-egress
+  namespace: week-one
+  labels:
+    d7s.dev/component: orders-db
+    d7s.dev/managed-by: d7s
+    d7s.dev/stack: week-one
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: orders-db
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 443

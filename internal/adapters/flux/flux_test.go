@@ -1187,7 +1187,16 @@ func TestEmitNeonControlPlaneEgressGrantsOnlyTfRunnerOn443(t *testing.T) {
 // egress.go's neonControlPlaneHost doc comment): even the harness's own
 // managed-without-consumers shape (mirrored from
 // examples/week-three/harness-variant/stack.yaml) still compiles the
-// waypoint and the control-plane ServiceEntry/AuthorizationPolicy.
+// waypoint and the control-plane ServiceEntry/AuthorizationPolicy — and,
+// per week-four plan Revision 4 (Control-plane-edge round, 2026-07-27),
+// the FLOOR-layer NetworkPolicy control-plane edge as well: one shared
+// object podSelector-scoped to app.kubernetes.io/name: tf-runner
+// (tfRunnerPodSelectorValue's doc comment, networkpolicy.go — verified
+// against tofu-controller's pinned v0.16.4 tag), allowing TCP 6443 and
+// 443. This stack has no self-hosted component, so the CNPG-scoped
+// control-plane edge (emitCNPGControlPlaneEgress) must be absent —
+// nothing in this stack carries a cnpg.io/cluster pod label for it to
+// select.
 func TestEmitManagedPlacementAlwaysCompilesControlPlaneEgress(t *testing.T) {
 	stack := domain.Stack{
 		Name: "harness-variant",
@@ -1210,6 +1219,27 @@ func TestEmitManagedPlacementAlwaysCompilesControlPlaneEgress(t *testing.T) {
 	} {
 		if _, ok := manifests.Files[want]; !ok {
 			t.Errorf("expected %s to be compiled for a managed component with no declared consumers, got %v", want, sortedKeys(manifests.Files))
+		}
+	}
+
+	tfRunnerFloor, ok := manifests.Files["apps/harness-variant/networkpolicy-tf-runner-controlplane-egress.yaml"]
+	if !ok {
+		t.Fatalf("expected the tf-runner floor control-plane egress to be compiled, got %v", sortedKeys(manifests.Files))
+	}
+	tfRunnerFloorStr := string(tfRunnerFloor)
+	for _, want := range []string{
+		"app.kubernetes.io/name: tf-runner",
+		"port: 6443",
+		"port: 443",
+	} {
+		if !strings.Contains(tfRunnerFloorStr, want) {
+			t.Errorf("tf-runner floor control-plane egress missing %q:\n%s", want, tfRunnerFloorStr)
+		}
+	}
+
+	for path := range manifests.Files {
+		if strings.HasSuffix(filepath.Base(path), "-networkpolicy-controlplane-egress.yaml") {
+			t.Errorf("emitted the CNPG-scoped floor control-plane egress %s in a stack with no self-hosted component", path)
 		}
 	}
 }
@@ -1262,9 +1292,13 @@ func TestEmitNetworkPolicyFloorForMeshEnrolledNamespace(t *testing.T) {
 	}
 }
 
-// TestEmitNetworkPoliciesCarryOwnershipLabels proves all three compiled
-// NetworkPolicy objects carry the standard d7s.dev/* ownership labels
-// (golden rule 27) exactly like every other emitted object.
+// TestEmitNetworkPoliciesCarryOwnershipLabels proves all compiled
+// NetworkPolicy objects — including the Revision 4 (2026-07-27,
+// week-four plan, Control-plane-edge round) CNPG-scoped control-plane
+// egress object — carry the standard d7s.dev/* ownership labels (golden
+// rule 27) exactly like every other emitted object. The CNPG-scoped
+// object additionally carries the component label
+// (ownershipLabels(stackName, pg.Name), like orders-db-authorizationpolicy.yaml).
 func TestEmitNetworkPoliciesCarryOwnershipLabels(t *testing.T) {
 	manifests, err := flux.New().Emit(exampleStack())
 	if err != nil {
@@ -1274,11 +1308,25 @@ func TestEmitNetworkPoliciesCarryOwnershipLabels(t *testing.T) {
 		"apps/week-one/networkpolicy-default-deny-egress.yaml",
 		"apps/week-one/networkpolicy-allow-cluster-egress.yaml",
 		"apps/week-one/networkpolicy-allow-waypoint-egress.yaml",
+		"apps/week-one/orders-db-networkpolicy-controlplane-egress.yaml",
 	} {
 		np := string(manifests.Files[path])
 		if !strings.Contains(np, "d7s.dev/managed-by: d7s") || !strings.Contains(np, "d7s.dev/stack: week-one") {
 			t.Errorf("%s does not carry the full ownership-label set:\n%s", path, np)
 		}
+	}
+	cnpgFloor := string(manifests.Files["apps/week-one/orders-db-networkpolicy-controlplane-egress.yaml"])
+	if !strings.Contains(cnpgFloor, "d7s.dev/component: orders-db") {
+		t.Errorf("orders-db-networkpolicy-controlplane-egress.yaml does not carry the component ownership label:\n%s", cnpgFloor)
+	}
+
+	managedManifests, err := flux.New().Emit(managedExampleStack())
+	if err != nil {
+		t.Fatalf("Emit (managed): %v", err)
+	}
+	tfRunnerFloor := string(managedManifests.Files["apps/week-one/networkpolicy-tf-runner-controlplane-egress.yaml"])
+	if !strings.Contains(tfRunnerFloor, "d7s.dev/managed-by: d7s") || !strings.Contains(tfRunnerFloor, "d7s.dev/stack: week-one") {
+		t.Errorf("networkpolicy-tf-runner-controlplane-egress.yaml does not carry the full ownership-label set:\n%s", tfRunnerFloor)
 	}
 }
 
@@ -1318,7 +1366,14 @@ func TestEmitNetworkPolicyAbsentWithoutMeshEnrollment(t *testing.T) {
 // component's egress wiring joins the ambient mesh (so the floor and the
 // fixed cluster allowance DO compile) without ever compiling a waypoint
 // object — the waypoint-scoped grant must not exist either, since it
-// would otherwise select a pod label nothing in this stack carries.
+// would otherwise select a pod label nothing in this stack carries. It
+// also proves the FLOOR-layer CNPG control-plane edge (week-four plan
+// Revision 4, Control-plane-edge round, 2026-07-27): this self-hosted-
+// only stack DOES compile a control-plane-egress object podSelector-
+// scoped to cnpg.io/cluster: orders-db (the exact selector convention
+// flux.go's zero-trust AuthorizationPolicy already uses for the same
+// Cluster's pods), allowing TCP 6443 and 443 — and, since this stack has
+// no managed component, the tf-runner-scoped floor edge must be absent.
 func TestEmitNetworkPolicyOmitsWaypointGrantWithoutAWaypoint(t *testing.T) {
 	stack := domain.Stack{
 		Name: "week-one",
@@ -1348,6 +1403,24 @@ func TestEmitNetworkPolicyOmitsWaypointGrantWithoutAWaypoint(t *testing.T) {
 	}
 	if _, ok := manifests.Files["apps/week-one/networkpolicy-allow-waypoint-egress.yaml"]; ok {
 		t.Error("emitted allow-waypoint-egress with no waypoint in the stack to grant it to — a dangling selector")
+	}
+
+	cnpgFloor, ok := manifests.Files["apps/week-one/orders-db-networkpolicy-controlplane-egress.yaml"]
+	if !ok {
+		t.Fatalf("expected the CNPG floor control-plane egress to be compiled, got %v", sortedKeys(manifests.Files))
+	}
+	cnpgFloorStr := string(cnpgFloor)
+	for _, want := range []string{
+		"cnpg.io/cluster: orders-db",
+		"port: 6443",
+		"port: 443",
+	} {
+		if !strings.Contains(cnpgFloorStr, want) {
+			t.Errorf("CNPG floor control-plane egress missing %q:\n%s", want, cnpgFloorStr)
+		}
+	}
+	if _, ok := manifests.Files["apps/week-one/networkpolicy-tf-runner-controlplane-egress.yaml"]; ok {
+		t.Error("emitted the tf-runner floor control-plane egress in a stack with no managed component")
 	}
 }
 

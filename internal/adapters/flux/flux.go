@@ -189,7 +189,7 @@ func (e *Emitter) Emit(stack domain.Stack) (ports.Manifests, error) {
 		return ports.Manifests{}, err
 	}
 	if appMeshEnabled {
-		if err := emitNetworkPolicies(files, stack.Name, waypointPresent); err != nil {
+		if err := emitNetworkPolicies(files, stack.Name, waypointPresent, selfHosted, managed); err != nil {
 			return ports.Manifests{}, err
 		}
 	}
