@@ -9,7 +9,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      istio.io/gateway-name: waypoint
+      gateway.networking.k8s.io/gateway-name: waypoint
   policyTypes:
     - Egress
   egress:

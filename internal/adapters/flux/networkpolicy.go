@@ -523,10 +523,10 @@ func emitAllowClusterEgress(files map[string][]byte, stackName string) error {
 }
 
 // emitAllowWaypointEgress compiles bullet (c): the waypoint pod itself
-// (matched by istio.io/gateway-name, the label istiod's gateway-
-// deployment-controller applies to every waypoint pod it provisions,
-// named after the owning Gateway resource — verified 2026-07-27) is the
-// sole external gate, so it alone is granted unrestricted egress: an
+// (matched by gateway.networking.k8s.io/gateway-name, the Gateway API
+// label istiod's gateway-deployment-controller actually applies to every
+// waypoint pod it provisions, named after the owning Gateway resource)
+// is the sole external gate, so it alone is granted unrestricted egress: an
 // empty NetworkPolicyEgressRule (neither To nor Ports set) is
 // Kubernetes' own "allow everything" shape. This does not widen who can
 // reach through it — the waypoint only ever forwards traffic the
@@ -547,7 +547,19 @@ func emitAllowWaypointEgress(files map[string][]byte, stackName string) error {
 		},
 		Spec: NetworkPolicySpec{
 			PodSelector: NetworkPolicyLabelSelector{
-				MatchLabels: map[string]string{"istio.io/gateway-name": waypointName},
+				// The earlier "istio.io/gateway-name" selector matched NO
+				// pod on a clean istiod 1.30.3 (that claim was "verified"
+				// on a drifted debug cluster before the floor was enforced
+				// anywhere) — leaving the waypoint itself under the deny
+				// floor: it accepted HBONE streams and had its own dial to
+				// the real destination denied (ztunnel: bytes_recv=0,
+				// "destination disconnected"; CI run 30299798154's
+				// TLS-handshake timeouts). Proven live 2026-07-27, both
+				// directions: with this selector the tf-runner identity
+				// reaches console.neon.tech (HTTP 401 — path open, auth
+				// required) and an undeclared identity stays DENIED at the
+				// waypoint's AuthorizationPolicy.
+				MatchLabels: map[string]string{"gateway.networking.k8s.io/gateway-name": waypointName},
 			},
 			PolicyTypes: []string{"Egress"},
 			Egress:      []NetworkPolicyEgressRule{{}},

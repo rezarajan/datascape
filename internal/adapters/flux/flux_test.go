@@ -1341,7 +1341,7 @@ func TestEmitNetworkPolicyFloorForMeshEnrolledNamespace(t *testing.T) {
 		t.Fatalf("Emit (managed): %v", err)
 	}
 	waypointPolicy := string(managedManifests.Files["apps/week-one/networkpolicy-allow-waypoint-egress.yaml"])
-	if !strings.Contains(waypointPolicy, "istio.io/gateway-name: waypoint") {
+	if !strings.Contains(waypointPolicy, "gateway.networking.k8s.io/gateway-name: waypoint") {
 		t.Errorf("allow-waypoint-egress does not select the waypoint pod:\n%s", waypointPolicy)
 	}
 	if !strings.Contains(waypointPolicy, "egress:\n    - {}") {
