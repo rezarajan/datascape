@@ -449,6 +449,19 @@ manual route in companion WALKTHROUGH.md. Build order: slices 1+2 (egress
 compiler + allowedConsumers un-refusal on managed — dispatched), then 3
 (mesh-mandatory scenarios + negative egress probes), then 4 (docs).
 
+## Week-four slices 1+2 landed and accepted; slice 3 dispatched (2026-07-26)
+
+`29abd8c` (egress compiler): waypoint-per-namespace + ServiceEntry +
+identity-scoped AuthorizationPolicy from declared wiring only; the ambient-label
+gap fixed (namespace joins the mesh whenever egress is needed, not only for
+mtls); allowedConsumers un-refused on managed; *.neon.tech DYNAMIC_DNS wildcard
+disclosed as a precision limit with the SNI question flagged for live proof.
+Review: clean incl. the inert-policy check (use-waypoint bound); one minor
+rule-33 aggregation finding returned as a fix commit (in flight). Slice 3
+dispatched in parallel: mesh-mandatory scenarios, positive probes through the
+mesh, negative undeclared-workload egress probes both scenarios, the SNI
+empirical answer. Both full live runs required before its commit.
+
 ## Open items owned by the owner
 
 - **Q1.1a**: RESOLVED 2026-07-26 — denominator (5) recorded; team name struck by
