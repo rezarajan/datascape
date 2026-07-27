@@ -234,6 +234,7 @@
               cluster-up
               tofu-install
               flux-install
+              istio-install
               git-source
               deliver-managed
               probe-managed
