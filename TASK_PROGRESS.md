@@ -657,10 +657,16 @@ the working warm-up path.
   at slice 1 (now a feasibility spike: tofu-controller health + local-Neon path).
 - **Push main**: RESOLVED 2026-07-27 — pushed (that run was red; root cause the
   gateway-crd gap above, fixed and re-pushed same day).
-- **Held slice-3 WIP** (other working copy): rebase on `563afc4`+`0e69c5b`
-  before landing — istio-install changed (CRD install added; REGISTRY_ONLY
-  revert still owed) and the floor-refutation above re-scopes the negative
-  egress probe legs.
+- **Held slice-3 WIP** (other working copy): DECISION 2026-07-27 (steward
+  question round, owner answers verbatim): *"Push it as a WIP branch
+  (Recommended)"* — owner pushes the staged work to a branch; the steward
+  session rebases on `a3e6e7d`, reverts REGISTRY_ONLY, wires istio-install
+  into the managed orchestration, re-scopes probe legs to the post-`94982e3`
+  model (cluster-local externals prove containment at the floor edge, managed
+  keeps the waypoint/identity negative), verifies live, lands. And *"Fold into
+  slice 3 (Recommended)"* — the harness cluster-name collision fix (unique
+  per-run name or lock) rides in the same slice, one review pass. Waiting on:
+  the WIP branch push (owner).
 - **Floor-enforcement vehicle**: decision round pending (see 2026-07-27 section)
   before the schema-knob vs CNI-exemption question can be answered with
   evidence.
